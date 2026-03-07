@@ -151,19 +151,76 @@ export const AuthState = {
             return data;
         },
 
-        // --- Alumnos Locales ---
-        getAlumnos() {
-            return JSON.parse(localStorage.getItem('icpc_alumnos') || '[]');
+        // --- Alumnos (Participantes en Supabase) ---
+        async getParticipantesByCoach(emailCoach) {
+            const { data, error } = await supabase
+                .from('icpc_usuarios')
+                .select('equipos_inscritos')
+                .eq('email', emailCoach)
+                .single();
+            if (error) return [];
+            return data.equipos_inscritos || [];
         },
-        addAlumno(email, equipo = '') {
-            const lista = this.getAlumnos();
-            if (!lista.find(a => a.email === email.toLowerCase())) {
-                lista.push({ email: email.toLowerCase(), equipo, checkin: false });
-                localStorage.setItem('icpc_alumnos', JSON.stringify(lista));
+
+        async saveParticipante(emailCoach, alumno) {
+            // Normalización
+            const emailNormal = alumno.email.toLowerCase().trim();
+            const nombreNormal = alumno.nombre.toUpperCase().trim();
+            const equipoNormal = alumno.equipo.trim();
+
+            const actual = await this.getUsuarioData(emailCoach);
+            let lista = actual.equipos_inscritos || [];
+
+            const idx = lista.findIndex(a => a.email === emailNormal);
+            const nuevoAlumno = {
+                email: emailNormal,
+                nombre: nombreNormal,
+                equipo: equipoNormal,
+                checkin: alumno.checkin || false
+            };
+
+            if (idx >= 0) {
+                lista[idx] = nuevoAlumno;
+            } else {
+                // Evitar duplicados por nombre si es necesario, o solo por email
+                lista.push(nuevoAlumno);
             }
+
+            const { error } = await supabase
+                .from('icpc_usuarios')
+                .update({ equipos_inscritos: lista })
+                .eq('email', emailCoach);
+
+            if (error) throw error;
+            return true;
         },
-        isAlumnoPermitido(email) {
-            return this.getAlumnos().some(a => a.email === email.toLowerCase());
+
+        async deleteParticipante(emailCoach, emailAlumno) {
+            const actual = await this.getUsuarioData(emailCoach);
+            let lista = (actual.equipos_inscritos || []).filter(a => a.email !== emailAlumno.toLowerCase());
+
+            const { error } = await supabase
+                .from('icpc_usuarios')
+                .update({ equipos_inscritos: lista })
+                .eq('email', emailCoach);
+
+            if (error) throw error;
+            return true;
+        },
+
+        async isAlumnoPermitido(email) {
+            // Un alumno está permitido si aparece en los equipos_inscritos de CUALQUIER profesor
+            // Nota: En una fase posterior, esto debería filtrarse por concurso_id específico
+            const { data, error } = await supabase
+                .from('icpc_usuarios')
+                .select('equipos_inscritos');
+
+            if (error) return false;
+
+            const emailLower = email.toLowerCase().trim();
+            return data.some(u =>
+                (u.equipos_inscritos || []).some(a => a.email === emailLower)
+            );
         },
 
         // --- Submissions (Tiempo Real Supabase) ---

@@ -147,36 +147,45 @@ export const DashboardProfesorView = () => {
                         <!-- Alta de Alumnos -->
                         <div class="coach-card">
                             <h4 style="margin-top:0; color:var(--tecnm-blue);">Inscribir Alumno / Equipo</h4>
-                            <p class="coach-hint" style="margin-bottom:1rem;">Añade los correos de tus alumnos para darles acceso a La Arena.</p>
-                            <div class="coach-inline-form" style="flex-direction:column;">
-                                <input type="email" id="coach-nuevo-alumno-email" class="coach-input" placeholder="correo@alu.tecnm.mx">
-                                <input type="text" id="coach-nuevo-alumno-equipo" class="coach-input" placeholder="Nombre del Equipo">
-                                <button class="btn btn-accent" onclick="window._inscribirAlumnoCoach()"><i class="fa-solid fa-user-plus"></i> Añadir Alumno</button>
-                            </div>
+                            <p class="coach-hint" style="margin-bottom:1rem;">Añade los datos de tus alumnos. El nombre se guardará en MAYÚSCULAS.</p>
                             
-                            <h5 style="margin-top:2rem; color:var(--tecnm-gold);">Alumnos Inscritos por ti</h5>
-                            <div class="coach-table-wrap">
-                                <table class="coach-table">
-                                    <thead><tr><th>Correo</th><th>Equipo</th><th>Acción</th></tr></thead>
-                                    <tbody id="admin-coach-alumnos-body"></tbody>
-                                </table>
+                            <div class="coach-field">
+                                <label class="coach-label">Nombre Completo del Alumno</label>
+                                <input type="text" id="coach-nuevo-alumno-nombre" class="coach-input" placeholder="Ej: JUAN PEREZ LOPEZ">
                             </div>
-                        </div>
+                            <div class="coach-field">
+                                <label class="coach-label">Correo Electrónico</label>
+                                <input type="email" id="coach-nuevo-alumno-email" class="coach-input" placeholder="alumno@itcm.edu.mx">
+                            </div>
+                            <div class="coach-field">
+                                <label class="coach-label">Nombre del Equipo</label>
+                                <input type="text" id="coach-nuevo-alumno-equipo" class="coach-input" placeholder="Ej: Los Halcones">
+                            </div>
 
+                            <button class="btn btn-primary" style="width:100%; margin-top:0.5rem;" onclick="window._inscribirAlumnoCoach()">
+                                <i class="fa-solid fa-plus"></i> Inscribir Equipo
+                            </button>
+                        </div>
+                        
                         <!-- Mini Scoreboard Focalizado -->
                         <div class="coach-card">
                             <div class="score-header">
                                 <h4 style="margin:0; color:var(--tecnm-gold);"><i class="fa-solid fa-list-ol"></i> Scoreboard en Vivo</h4>
                                 <span class="score-live-badge"><div class="live-dot"></div> LIVE</span>
                             </div>
-                            <p class="coach-hint" style="margin-bottom:1rem;">Resultados generales del concurso.</p>
-                            <div class="scoreboard-wrap">
-                                <table class="scoreboard-table">
-                                    <thead><tr><th>Rk</th><th>Equipo</th><th>Resueltos</th><th>Penalidad</th></tr></thead>
-                                    <tbody id="admin-coach-scoreboard-body"></tbody>
+                            <p class="coach-hint" style="margin-bottom:1rem;">Participantes Registrados y Resultados.</p>
+                            <div class="coach-table-wrap">
+                                <table class="coach-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Alumno / Correo</th>
+                                            <th>Equipo</th>
+                                            <th>Acción</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="admin-coach-alumnos-body"></tbody>
                                 </table>
                             </div>
-                            <p style="text-align:right; margin-top:1rem;"><small>Actualizado automáticamente cada 5s</small></p>
                         </div>
                     </div>
                 </div>
@@ -568,47 +577,53 @@ if (typeof window !== 'undefined') {
     };
 
     window._removerAlumnoCoach = async (alumnoEmail) => {
-        const emailCoach = AuthState.user.email;
-        const profeData = await AuthState.db.getUsuarioData(emailCoach);
-        if (!profeData) return;
+        const confirm = await UIModal.confirm('¿Quitar Alumno?', `¿Estás seguro de que deseas eliminar a ${alumnoEmail}?`);
+        if (!confirm) return;
 
-        const nuevosEquipos = (profeData.equipos_inscritos || []).filter(e => e.email !== alumnoEmail);
-        await supabase.from('icpc_usuarios').update({ equipos_inscritos: nuevosEquipos }).eq('email', emailCoach);
-
-        await renderAdminCoachAlumnos();
+        try {
+            await AuthState.db.deleteParticipante(AuthState.user.email, alumnoEmail);
+            await renderAdminCoachAlumnos();
+        } catch (e) {
+            UIModal.alert('Error', 'No se pudo eliminar al alumno.');
+        }
     };
 
     window._inscribirAlumnoCoach = async () => {
+        const nombreAlu = document.getElementById('coach-nuevo-alumno-nombre').value.trim();
         const emailAlu = document.getElementById('coach-nuevo-alumno-email').value.trim();
         const nombreEq = document.getElementById('coach-nuevo-alumno-equipo').value.trim();
 
-        if (!emailAlu || !nombreEq) {
-            UIModal.alert('Datos incompletos', 'Completa el Correo Electrónico y el Nombre del Equipo.');
+        if (!nombreAlu || !emailAlu || !nombreEq) {
+            UIModal.alert('Datos incompletos', 'Por favor llena el nombre completo, correo y equipo.');
             return;
         }
-
-        const emailCoach = AuthState.user.email;
-        const profeData = await AuthState.db.getUsuarioData(emailCoach);
-        if (!profeData) return;
-
-        const equipos = profeData.equipos_inscritos || [];
-        if (equipos.find(x => x.email === emailAlu)) {
-            UIModal.alert('Alumno Existente', 'Este correo ya pertenece a uno de tus equipos registrados.');
-            return;
-        }
-
-        equipos.push({ email: emailAlu, equipo: nombreEq });
 
         const btn = document.querySelector('button[onclick="window._inscribirAlumnoCoach()"]');
-        if (btn) btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Resgistrando...';
+        if (btn) {
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Registrando...';
+            btn.disabled = true;
+        }
 
-        await supabase.from('icpc_usuarios').update({ equipos_inscritos: equipos }).eq('email', emailCoach);
+        try {
+            await AuthState.db.saveParticipante(AuthState.user.email, {
+                nombre: nombreAlu,
+                email: emailAlu,
+                equipo: nombreEq
+            });
 
-        document.getElementById('coach-nuevo-alumno-email').value = '';
-        document.getElementById('coach-nuevo-alumno-equipo').value = '';
-        if (btn) btn.innerHTML = '<i class="fa-solid fa-plus"></i> Inscribir Equipo';
+            document.getElementById('coach-nuevo-alumno-nombre').value = '';
+            document.getElementById('coach-nuevo-alumno-email').value = '';
+            document.getElementById('coach-nuevo-alumno-equipo').value = '';
 
-        await renderAdminCoachAlumnos();
+            await renderAdminCoachAlumnos();
+        } catch (error) {
+            UIModal.alert('Error', 'Hubo un problema al registrar al alumno.');
+        } finally {
+            if (btn) {
+                btn.innerHTML = '<i class="fa-solid fa-plus"></i> Inscribir Equipo';
+                btn.disabled = false;
+            }
+        }
     };
 }
 
@@ -625,9 +640,12 @@ async function renderAdminCoachAlumnos() {
     } else {
         body.innerHTML = profeData.equipos_inscritos.map(a => `
             <tr>
-                <td>${a.email}</td>
-                <td><span style="color:var(--tecnm-blue); font-weight:600;">${a.equipo}</span></td>
-                <td><button class="btn-tbl btn-tbl--danger" onclick="window._removerAlumnoCoach('${a.email}')"><i class="fa-solid fa-user-minus"></i> Quitar</button></td>
+                <td>
+                    <div style="font-weight:700; color:white;">${a.nombre || 'SIN NOMBRE'}</div>
+                    <div style="font-size:0.8rem; color:var(--tecnm-text-muted);">${a.email}</div>
+                </td>
+                <td><span style="color:var(--tecnm-gold); font-weight:600;">${a.equipo}</span></td>
+                <td><button class="btn-tbl btn-tbl--danger" onclick="window._removerAlumnoCoach('${a.email}')"><i class="fa-solid fa-user-minus"></i></button></td>
             </tr>
         `).join('');
     }
