@@ -135,9 +135,9 @@ export const AuthState = {
         async registerUsuario(user) {
             const { data, error } = await supabase.from('icpc_usuarios').insert({
                 email: user.email.toLowerCase(),
-                name: user.name,
+                nombre: user.name,
                 password: user.password,
-                is_admin: user.is_admin || false,
+                is_sysadmin: user.is_admin || false,
                 equipos_inscritos: []
             }).select();
             if (error) {
