@@ -1,5 +1,7 @@
 import { AuthState } from '../core/authState.js';
 import { JudgeSim } from '../core/judgeSim.js';
+import { ConcursoSecurity } from '../core/concursoSecurity.js';
+import { UIModal } from './ui/modal.js';
 
 // ══════════════════════════════════════════════════════
 //  La Arena — Editor de código + Juez + Scoreboard
@@ -10,9 +12,41 @@ let concursoEndTime = null;
 let problemaActivo = null;
 
 export const ArenaView = () => {
-    setTimeout(() => {
+    setTimeout(async () => {
         if (!AuthState.isAlumno()) { window.router.navigate('/'); return; }
-        initArena();
+
+        // Activar Seguridad
+        ConcursoSecurity.init();
+
+        const goFullscreen = await UIModal.confirm(
+            '🛡️ Modo Concurso Activado',
+            'Esta competencia requiere Pantalla Completa obligatoria. No podrás copiar, pegar ni salir de la pestaña sin ser detectado. ¿Deseas entrar?'
+        );
+
+        if (goFullscreen) {
+            await ConcursoSecurity.requestFullscreen();
+            initArena();
+        } else {
+            ConcursoSecurity.destroy();
+            window.router.navigate('/');
+        }
+
+        // Detectar si sale de fullscreen para alertar
+        ConcursoSecurity.handleFullscreenExit(() => {
+            if (ConcursoSecurity.isActive) {
+                UIModal.alert('⚠️ Alerta de Seguridad', 'Has salido de la pantalla completa. Por favor re-ingresa para continuar con el concurso.');
+            }
+        });
+
+        // Cleanup al salir de la ruta (se maneja en el router globalmente mejor, 
+        // pero aquí añadimos un listener de seguridad)
+        const onNav = () => {
+            if (window.location.pathname !== '/arena') {
+                ConcursoSecurity.destroy();
+                window.removeEventListener('popstate', onNav);
+            }
+        };
+        window.addEventListener('popstate', onNav);
     }, 100);
 
     return `
