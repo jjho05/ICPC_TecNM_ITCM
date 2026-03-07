@@ -69,7 +69,13 @@ export const LoginProfesorView = () => {
                     Ingresar al Panel
                 </button>
             </form>
-            <p style="text-align:center;margin-top:1.25rem;">
+            <p style="text-align:center;margin-top:1.5rem;font-size:.9em;">
+                ¿Eres nuevo? 
+                <a href="#" data-route="/register-profesor" style="color:var(--tecnm-blue);font-weight:600;text-decoration:none;">
+                    Regístrate aquí
+                </a>
+            </p>
+            <p style="text-align:center;margin-top:1rem;">
                 <a href="#" data-route="/" style="color:var(--tecnm-text-muted);text-decoration:none;font-size:.9em;">
                     <i class="fa-solid fa-arrow-left"></i> Volver al Inicio
                 </a>

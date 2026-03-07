@@ -126,11 +126,25 @@ export const AuthState = {
         async validateUsuario(email, password) {
             const { data, error } = await supabase.from('icpc_usuarios')
                 .select('*')
-                .eq('email', email)
+                .eq('email', email.toLowerCase())
                 .eq('password', password)
                 .single();
             if (error || !data) return false;
             return true;
+        },
+        async registerUsuario(user) {
+            const { data, error } = await supabase.from('icpc_usuarios').insert({
+                email: user.email.toLowerCase(),
+                name: user.name,
+                password: user.password,
+                is_admin: user.is_admin || false,
+                equipos_inscritos: []
+            }).select();
+            if (error) {
+                console.error("Error registerUsuario:", error);
+                throw error;
+            }
+            return data;
         },
         async getUsuarioData(email) {
             const { data } = await supabase.from('icpc_usuarios').select('*').eq('email', email).single();

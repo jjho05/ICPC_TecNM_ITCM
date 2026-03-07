@@ -1,5 +1,6 @@
 import { LandingView } from '../components/landing.js';
 import { LoginProfesorView } from '../components/loginProfesor.js';
+import { RegisterProfesorView } from '../components/registerProfesor.js';
 import { LoginAdminView } from '../components/loginAdmin.js';
 import { DashboardProfesorView } from '../components/dashboardProfesor.js';
 import { AdminPanelView } from '../components/adminPanel.js';
@@ -12,6 +13,7 @@ import { AuthState } from './authState.js';
 const routes = {
     '/': LandingView,
     '/login-profesor': LoginProfesorView,
+    '/register-profesor': RegisterProfesorView,
     '/login-admin': LoginAdminView,
     '/dashboard-profesor': guardProfesor(DashboardProfesorView),
     '/admin': guardAdmin(AdminPanelView),
