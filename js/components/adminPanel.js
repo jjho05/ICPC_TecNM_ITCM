@@ -1,0 +1,550 @@
+import { AuthState } from '../core/authState.js';
+import { JudgeSim } from '../core/judgeSim.js';
+import { UIModal } from './ui/modal.js';
+import { PROBLEMS_SEED } from '../data/problemsSeed.js';
+
+// ══════════════════════════════════════════════════════
+//  Admin Panel — Plataforma ICPC TecNM
+//  Tabs: Banco de Problemas | Editor | Coaches | Concursos
+// ══════════════════════════════════════════════════════
+
+export const AdminPanelView = () => {
+
+    // Seed initial problems if empty
+    if (AuthState.db.getProblemas().length === 0) {
+        AuthState.db.saveProblemasLote(PROBLEMS_SEED);
+    }
+
+    setTimeout(() => {
+        if (!AuthState.isAdmin()) { window.router.navigate('/'); return; }
+        bindAdminEvents();
+        renderTab('tab-banco');
+    }, 100);
+
+    return `
+    <div class="admin-layout view-enter">
+
+        <!-- Sidebar -->
+        <aside class="admin-sidebar">
+            <div class="admin-sidebar-header">
+                <i class="fa-solid fa-shield-halved"></i>
+                <div>
+                    <p class="admin-role-label">Administrador</p>
+                    <p class="admin-role-email">${AuthState.user?.email || ''}</p>
+                </div>
+            </div>
+            <nav class="admin-nav">
+                <button class="admin-nav-btn active" data-tab="tab-banco">
+                    <i class="fa-solid fa-database"></i> Banco de Problemas
+                </button>
+                <button class="admin-nav-btn" data-tab="tab-editor">
+                    <i class="fa-solid fa-pen-to-square"></i> Editor de Problema
+                </button>
+                <button class="admin-nav-btn" data-tab="tab-profesores">
+                    <i class="fa-solid fa-users-gear"></i> Gestión de Profesores
+                </button>
+                <button class="admin-nav-btn" data-tab="tab-concursos">
+                    <i class="fa-solid fa-trophy"></i> Concursos
+                </button>
+            </nav>
+            <button class="admin-logout-btn" id="admin-logout">
+                <i class="fa-solid fa-right-from-bracket"></i> Cerrar Sesión
+            </button>
+        </aside>
+
+        <!-- Contenido principal -->
+        <main class="admin-main">
+
+            <!-- TAB: Banco de Problemas -->
+            <section id="tab-banco" class="admin-tab">
+                <div class="admin-tab-header">
+                    <div>
+                        <h2 class="admin-tab-title">Banco de Problemas</h2>
+                        <p class="admin-tab-sub" id="banco-count">Cargando...</p>
+                    </div>
+                    <div class="admin-header-actions">
+                        <button class="btn-admin btn-admin--ghost" id="btn-import-cf">
+                            <i class="fa-solid fa-cloud-arrow-down"></i> Importar de Codeforces
+                        </button>
+                        <button class="btn-admin btn-admin--gold" id="btn-nuevo-problema">
+                            <i class="fa-solid fa-plus"></i> Nuevo Problema
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Filtros -->
+                <div class="admin-filters">
+                    <input type="text" id="filter-search" class="admin-input" placeholder="🔍 Buscar por título o tag...">
+                    <select id="filter-dificultad" class="admin-select">
+                        <option value="">Toda dificultad</option>
+                        <option value="800">800 — Fácil</option>
+                        <option value="1000">1000</option>
+                        <option value="1200">1200</option>
+                        <option value="1400">1400</option>
+                        <option value="1600">1600 — Difícil</option>
+                        <option value="1800">1800+</option>
+                    </select>
+                    <select id="filter-fuente" class="admin-select">
+                        <option value="">Toda fuente</option>
+                        <option value="local">Local</option>
+                        <option value="codeforces">Codeforces</option>
+                        <option value="admin">Creado por Admin</option>
+                    </select>
+                </div>
+
+                <!-- Tabla -->
+                <div class="admin-table-wrap">
+                    <table class="admin-table" id="tabla-problemas">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Título</th>
+                                <th>Dificultad</th>
+                                <th>Tags</th>
+                                <th>Fuente</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabla-problemas-body"></tbody>
+                    </table>
+                </div>
+                <!-- Paginación -->
+                <div class="admin-pagination" id="banco-pagination"></div>
+            </section>
+
+            <!-- TAB: Editor de Problema -->
+            <section id="tab-editor" class="admin-tab" style="display:none;">
+                <div class="admin-tab-header">
+                    <div>
+                        <h2 class="admin-tab-title" id="editor-titulo-tab">Nuevo Problema</h2>
+                        <p class="admin-tab-sub">Completa todos los campos y añade al menos un caso de prueba.</p>
+                    </div>
+                    <button class="btn-admin btn-admin--ghost" id="btn-cancelar-editor">
+                        <i class="fa-solid fa-arrow-left"></i> Volver al Banco
+                    </button>
+                </div>
+                <div class="editor-layout">
+                    <!-- Columna izquierda: metadatos + descripción -->
+                    <div class="editor-left">
+                        <input type="hidden" id="edit-id">
+                        <div class="admin-field-group">
+                            <label class="admin-label">Título *</label>
+                            <input type="text" id="edit-titulo" class="admin-input" placeholder="Ej: Two Sum">
+                        </div>
+                        <div class="editor-meta-row">
+                            <div class="admin-field-group">
+                                <label class="admin-label">Dificultad (rating)</label>
+                                <input type="number" id="edit-dificultad" class="admin-input" placeholder="1000" min="800" max="3500">
+                            </div>
+                            <div class="admin-field-group">
+                                <label class="admin-label">Tags (separados por coma)</label>
+                                <input type="text" id="edit-tags" class="admin-input" placeholder="math, dp, strings">
+                            </div>
+                        </div>
+                        <div class="admin-field-group">
+                            <label class="admin-label">Descripción del Problema * (puedes usar HTML)</label>
+                            <textarea id="edit-desc" class="admin-textarea" rows="10" placeholder="Escribe el enunciado aquí..."></textarea>
+                        </div>
+                    </div>
+
+                    <!-- Columna derecha: testcases + ejecución -->
+                    <div class="editor-right">
+                        <div class="editor-testcases-header">
+                            <h4 class="admin-section-title">Casos de Prueba</h4>
+                            <button class="btn-admin btn-admin--ghost btn-sm" id="btn-add-testcase">
+                                <i class="fa-solid fa-plus"></i> Añadir Caso
+                            </button>
+                        </div>
+                        <div id="testcases-container"></div>
+
+                        <!-- Área de ejecución simulada -->
+                        <div class="editor-run-panel">
+                            <h4 class="admin-section-title">Probar Veredicto</h4>
+                            <p style="font-size:0.8rem;color:rgba(255,255,255,0.4);margin-bottom:.75rem;">
+                                Escribe un código de prueba para verificar el primer caso de prueba.
+                            </p>
+                            <select id="editor-lang" class="admin-select" style="margin-bottom:.5rem;">
+                                <option value="cpp">C++</option>
+                                <option value="java">Java</option>
+                                <option value="python">Python</option>
+                            </select>
+                            <textarea id="editor-code" class="code-editor" style="height:120px;" placeholder="// Escribe código de prueba..."></textarea>
+                            <button class="btn-admin btn-admin--ghost" id="btn-run-editor" style="margin-top:.5rem;">
+                                <i class="fa-solid fa-play"></i> Ejecutar
+                            </button>
+                            <div id="editor-run-output" class="run-output" style="display:none;"></div>
+                        </div>
+
+                        <!-- Acciones finales -->
+                        <div class="editor-actions">
+                            <button class="btn-admin btn-admin--primary" id="btn-guardar-problema">
+                                <i class="fa-solid fa-floppy-disk"></i> Guardar
+                            </button>
+                            <button class="btn-admin btn-admin--gold" id="btn-publicar-problema">
+                                <i class="fa-solid fa-paper-plane"></i> Guardar y Publicar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB: Gestión de Profesores -->
+            <section id="tab-profesores" class="admin-tab" style="display:none;">
+                <div class="admin-tab-header">
+                    <h2 class="admin-tab-title">Gestión de Profesores (Jueces/Coaches)</h2>
+                    <button class="btn-admin btn-admin--gold" id="btn-add-profesor">
+                        <i class="fa-solid fa-plus"></i> Añadir Profesor
+                    </button>
+                </div>
+                <div id="form-add-profesor" class="admin-inline-form" style="display:none;">
+                    <input type="text" id="profesor-new-name" class="admin-input" placeholder="Nombre completo">
+                    <input type="email" id="profesor-new-email" class="admin-input" placeholder="profesor@tecnm.mx">
+                    <input type="password" id="profesor-new-pass" class="admin-input" placeholder="Contraseña temporal">
+                    <button class="btn-admin btn-admin--primary" id="btn-save-profesor"><i class="fa-solid fa-check"></i> Guardar</button>
+                    <button class="btn-admin btn-admin--ghost" id="btn-cancel-profesor"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <div class="admin-table-wrap">
+                    <table class="admin-table">
+                        <thead><tr><th>Nombre</th><th>Correo</th><th>Eventos (Juez/Coach)</th><th>Acciones</th></tr></thead>
+                        <tbody id="tabla-profesores-body"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- TAB: Concursos -->
+            <section id="tab-concursos" class="admin-tab" style="display:none;">
+                <div class="admin-tab-header">
+                    <h2 class="admin-tab-title">Historial de Concursos</h2>
+                </div>
+                <div class="admin-table-wrap">
+                    <table class="admin-table">
+                        <thead>
+                            <tr><th>Título</th><th>Estado</th><th>Problemas</th><th>Submissions</th><th>Exportar</th></tr>
+                        </thead>
+                        <tbody id="tabla-concursos-body"></tbody>
+                    </table>
+                </div>
+            </section>
+
+        </main>
+    </div>`;
+};
+
+// ── Lógica del Admin Panel ─────────────────────────────
+
+let bancoPagina = 1;
+const BANCO_POR_PAGINA = 20;
+let bancoFiltrado = [];
+
+function bindAdminEvents() {
+    // Tabs
+    document.querySelectorAll('.admin-nav-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.admin-nav-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            renderTab(btn.dataset.tab);
+        });
+    });
+
+    document.getElementById('admin-logout').addEventListener('click', () => {
+        AuthState.logout(); window.router.navigate('/');
+    });
+
+    // Banco
+    document.getElementById('btn-import-cf').addEventListener('click', importarDeCodeforces);
+    document.getElementById('btn-nuevo-problema').addEventListener('click', () => abrirEditor(null));
+    document.getElementById('filter-search').addEventListener('input', () => { bancoPagina = 1; renderBanco(); });
+    document.getElementById('filter-dificultad').addEventListener('change', () => { bancoPagina = 1; renderBanco(); });
+    document.getElementById('filter-fuente').addEventListener('change', () => { bancoPagina = 1; renderBanco(); });
+
+    // Editor
+    document.getElementById('btn-cancelar-editor').addEventListener('click', () => renderTab('tab-banco'));
+    document.getElementById('btn-add-testcase').addEventListener('click', addTestcaseRow);
+    document.getElementById('btn-run-editor').addEventListener('click', runEditorCode);
+    document.getElementById('btn-guardar-problema').addEventListener('click', () => guardarProblema(false));
+    document.getElementById('btn-publicar-problema').addEventListener('click', () => guardarProblema(true));
+
+    // Profesores
+    document.getElementById('btn-add-profesor').addEventListener('click', () => {
+        document.getElementById('form-add-profesor').style.display = 'flex';
+    });
+    document.getElementById('btn-cancel-profesor').addEventListener('click', () => {
+        document.getElementById('form-add-profesor').style.display = 'none';
+    });
+    document.getElementById('btn-save-profesor').addEventListener('click', saveProfesor);
+
+    renderBanco();
+    renderProfesores();
+    renderConcursos();
+}
+
+function renderTab(tabId) {
+    document.querySelectorAll('.admin-tab').forEach(t => t.style.display = 'none');
+    const tab = document.getElementById(tabId);
+    if (tab) tab.style.display = 'block';
+    if (tabId === 'tab-banco') renderBanco();
+    if (tabId === 'tab-profesores') renderProfesores();
+    if (tabId === 'tab-concursos') renderConcursos();
+}
+
+function renderBanco() {
+    const search = document.getElementById('filter-search')?.value?.toLowerCase() || '';
+    const diff = document.getElementById('filter-dificultad')?.value || '';
+    const fuente = document.getElementById('filter-fuente')?.value || '';
+
+    const todos = AuthState.db.getProblemas();
+    bancoFiltrado = todos.filter(p => {
+        const matchSearch = !search || p.titulo.toLowerCase().includes(search) || (p.tags || []).join(' ').includes(search);
+        const matchDiff = !diff || p.dificultad == diff;
+        const matchFuente = !fuente || p.fuente === fuente;
+        return matchSearch && matchDiff && matchFuente;
+    });
+
+    document.getElementById('banco-count').textContent = `${bancoFiltrado.length} de ${todos.length} problemas`;
+
+    const inicio = (bancoPagina - 1) * BANCO_POR_PAGINA;
+    const pagina = bancoFiltrado.slice(inicio, inicio + BANCO_POR_PAGINA);
+
+    const body = document.getElementById('tabla-problemas-body');
+    if (!body) return;
+
+    body.innerHTML = pagina.map((p, i) => `
+        <tr>
+            <td>${inicio + i + 1}</td>
+            <td class="problema-titulo">${p.titulo}</td>
+            <td><span class="diff-badge diff-${getDiffClass(p.dificultad)}">${p.dificultad || '?'}</span></td>
+            <td class="tags-cell">${(p.tags || []).slice(0, 3).map(t => `<span class="tag-chip">${t}</span>`).join('')}</td>
+            <td><span class="fuente-badge">${p.fuente || 'local'}</span></td>
+            <td class="acciones-cell">
+                <button class="btn-tbl" onclick="window._adminEditProblema('${p.id}')"><i class="fa-solid fa-pen"></i></button>
+                <button class="btn-tbl btn-tbl--danger" onclick="window._adminDeleteProblema('${p.id}')"><i class="fa-solid fa-trash"></i></button>
+            </td>
+        </tr>
+    `).join('') || '<tr><td colspan="6" style="text-align:center;padding:2rem;opacity:.4;">No hay problemas con ese filtro.</td></tr>';
+
+    renderPaginacion(bancoFiltrado.length);
+
+    // Exponer funciones en window para eventos inline
+    window._adminEditProblema = (id) => abrirEditor(AuthState.db.getProblemaById(id));
+    window._adminDeleteProblema = async (id) => {
+        if (await UIModal.confirm('Eliminar Problema', '¿Seguro que deseas eliminar este problema del banco?')) {
+            AuthState.db.removeProblema(id); renderBanco();
+        }
+    };
+}
+
+function renderPaginacion(total) {
+    const totalPaginas = Math.ceil(total / BANCO_POR_PAGINA);
+    const pag = document.getElementById('banco-pagination');
+    if (!pag) return;
+    pag.innerHTML = '';
+    for (let i = 1; i <= totalPaginas; i++) {
+        const btn = document.createElement('button');
+        btn.className = `pag-btn${i === bancoPagina ? ' active' : ''}`;
+        btn.textContent = i;
+        btn.onclick = () => { bancoPagina = i; renderBanco(); };
+        pag.appendChild(btn);
+    }
+}
+
+function getDiffClass(d) {
+    if (!d) return 'medio';
+    if (d <= 1000) return 'facil';
+    if (d <= 1400) return 'medio';
+    if (d <= 1800) return 'dificil';
+    return 'experto';
+}
+
+async function importarDeCodeforces() {
+    const btn = document.getElementById('btn-import-cf');
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Importando...';
+    btn.disabled = true;
+
+    try {
+        const res = await fetch('https://codeforces.com/api/problemset.problems');
+        const data = await res.json();
+
+        if (data.status !== 'OK') throw new Error('API error');
+
+        const problemas = data.result.problems
+            .filter(p => p.rating && p.rating >= 800 && p.rating <= 2000 && p.tags?.length)
+            .slice(0, 500)
+            .map(p => ({
+                id: `cf_${p.contestId}_${p.index}`,
+                titulo: p.name,
+                dificultad: p.rating,
+                tags: p.tags,
+                fuente: 'codeforces',
+                desc: `<h3>${p.name}</h3>
+<p><em>Problema de Codeforces — Ronda ${p.contestId}, Problema ${p.index}</em></p>
+<p>Puedes ver el enunciado completo en:
+<a href="https://codeforces.com/problemset/problem/${p.contestId}/${p.index}" target="_blank" style="color:var(--tecnm-gold);">
+codeforces.com/problemset/problem/${p.contestId}/${p.index}
+</a></p>`,
+                ejemplos: [],
+                testcases: []
+            }));
+
+        const importados = AuthState.db.saveProblemasLote(problemas);
+        btn.innerHTML = `<i class="fa-solid fa-check"></i> ${importados} importados`;
+        setTimeout(() => {
+            btn.innerHTML = '<i class="fa-solid fa-cloud-arrow-down"></i> Importar de Codeforces';
+            btn.disabled = false;
+        }, 3000);
+        renderBanco();
+    } catch (e) {
+        btn.innerHTML = '<i class="fa-solid fa-xmark"></i> Error (sin conexión)';
+        btn.disabled = false;
+        setTimeout(() => { btn.innerHTML = '<i class="fa-solid fa-cloud-arrow-down"></i> Importar de Codeforces'; }, 3000);
+    }
+}
+
+function abrirEditor(problema) {
+    renderTab('tab-editor');
+    document.querySelectorAll('.admin-nav-btn').forEach(b => b.classList.remove('active'));
+    document.querySelector('[data-tab="tab-editor"]').classList.add('active');
+
+    document.getElementById('editor-titulo-tab').textContent = problema ? 'Editar Problema' : 'Nuevo Problema';
+    document.getElementById('edit-id').value = problema?.id || '';
+    document.getElementById('edit-titulo').value = problema?.titulo || '';
+    document.getElementById('edit-dificultad').value = problema?.dificultad || 1000;
+    document.getElementById('edit-tags').value = (problema?.tags || []).join(', ');
+    document.getElementById('edit-desc').value = problema?.desc || '';
+
+    const container = document.getElementById('testcases-container');
+    container.innerHTML = '';
+    const testcases = problema?.testcases?.length ? problema.testcases : [{ input: '', expected: '' }];
+    testcases.forEach(tc => addTestcaseRow(tc));
+}
+
+function addTestcaseRow(tc = {}) {
+    const container = document.getElementById('testcases-container');
+    const row = document.createElement('div');
+    row.className = 'testcase-row';
+    row.innerHTML = `
+        <div class="testcase-field">
+            <label class="admin-label">Input</label>
+            <textarea class="admin-textarea tc-input" rows="3" placeholder="Entrada esperada">${tc.input || ''}</textarea>
+        </div>
+        <div class="testcase-field">
+            <label class="admin-label">Output esperado</label>
+            <textarea class="admin-textarea tc-expected" rows="3" placeholder="Salida esperada">${tc.expected || tc.output || ''}</textarea>
+        </div>
+        <button class="btn-tbl btn-tbl--danger tc-remove" title="Eliminar"><i class="fa-solid fa-xmark"></i></button>
+    `;
+    row.querySelector('.tc-remove').onclick = () => row.remove();
+    container.appendChild(row);
+}
+
+function runEditorCode() {
+    const code = document.getElementById('editor-code').value;
+    const lang = document.getElementById('editor-lang').value;
+    const tcInputs = [...document.querySelectorAll('.tc-input')].map(el => el.value);
+    const tcExpecteds = [...document.querySelectorAll('.tc-expected')].map(el => el.value);
+
+    const ejemplo = { input: tcInputs[0] || '', output: tcExpecteds[0] || '' };
+    const resultado = JudgeSim.run(code, lang, ejemplo);
+
+    const outputEl = document.getElementById('editor-run-output');
+    outputEl.style.display = 'block';
+    outputEl.innerHTML = `
+        <div class="run-output-header">
+            <span class="verd-badge verd-${resultado.ok ? 'ac' : 'wa'}">${resultado.ok ? 'AC' : 'WA'}</span>
+            <span style="font-size:.8rem;color:rgba(255,255,255,.4);">Output simulado</span>
+        </div>
+        <pre class="run-pre">${resultado.output || '(sin salida)'}</pre>
+    `;
+}
+
+function guardarProblema(publicar) {
+    const id = document.getElementById('edit-id').value || `admin_${Date.now()}`;
+    const titulo = document.getElementById('edit-titulo').value.trim();
+    const diff = parseInt(document.getElementById('edit-dificultad').value) || 1000;
+    const tags = document.getElementById('edit-tags').value.split(',').map(t => t.trim()).filter(Boolean);
+    const desc = document.getElementById('edit-desc').value.trim();
+
+    if (!titulo || !desc) { UIModal.alert('Campos Incompletos', 'Completa Título y Descripción.'); return; }
+
+    const inputs = [...document.querySelectorAll('.tc-input')].map(el => el.value.trim());
+    const expecteds = [...document.querySelectorAll('.tc-expected')].map(el => el.value.trim());
+    const testcases = inputs.map((inp, i) => ({ input: inp, expected: expecteds[i] || '' })).filter(tc => tc.input);
+    const ejemplos = testcases.slice(0, 2).map(tc => ({ input: tc.input, output: tc.expected }));
+
+    AuthState.db.saveProblema({
+        id, titulo, dificultad: diff, tags, desc, ejemplos, testcases,
+        fuente: 'admin', publicado: publicar
+    });
+
+    renderTab('tab-banco');
+}
+
+function renderProfesores() {
+    const body = document.getElementById('tabla-profesores-body');
+    if (!body) return;
+    const usuarios = AuthState.db.getUsuarios();
+
+    body.innerHTML = usuarios.length
+        ? usuarios.map(u => {
+            const concursos = AuthState.db.getConcursos();
+            const esJuez = concursos.filter(c => c.jueces_ids.includes(u.email)).length;
+            const esCoach = concursos.filter(c => c.coaches_ids.includes(u.email)).length;
+            return `
+            <tr>
+                <td>${u.name}</td>
+                <td>${u.email}</td>
+                <td><span style="color:var(--tecnm-blue);font-weight:600;">${esJuez} J</span> / <span style="color:var(--tecnm-gold);font-weight:600;">${esCoach} C</span></td>
+                <td><button class="btn-tbl btn-tbl--danger" onclick="window._removeProfesor('${u.email}')"><i class="fa-solid fa-trash"></i> Eliminar</button></td>
+            </tr>`;
+        }).join('')
+        : '<tr><td colspan="4" style="text-align:center;padding:2rem;opacity:.4;">No hay profesores registrados.</td></tr>';
+
+    window._removeProfesor = async (email) => {
+        if (await UIModal.confirm('Eliminar Profesor', `¿Eliminar al profesor ${email}? Perderá acceso a sus eventos.`)) {
+            AuthState.db.removeUsuario(email); renderProfesores();
+        }
+    };
+}
+
+async function saveProfesor() {
+    const name = document.getElementById('profesor-new-name').value.trim();
+    const email = document.getElementById('profesor-new-email').value.trim();
+    const pass = document.getElementById('profesor-new-pass').value.trim();
+    if (!name || !email || !pass) { await UIModal.alert('Campos Incompletos', 'Completa todos los campos para añadir un profesor.'); return; }
+
+    AuthState.db.addUsuario(email, name, pass);
+
+    document.getElementById('form-add-profesor').style.display = 'none';
+    document.getElementById('profesor-new-name').value = '';
+    document.getElementById('profesor-new-email').value = '';
+    document.getElementById('profesor-new-pass').value = '';
+    renderProfesores();
+}
+
+function renderConcursos() {
+    const body = document.getElementById('tabla-concursos-body');
+    if (!body) return;
+    const concursos = AuthState.db.getConcursos();
+    body.innerHTML = concursos.length
+        ? concursos.map(c => {
+            const subs = AuthState.db.getSubmissionsByConcurso(c.id).length;
+            return `
+            <tr>
+                <td>${c.titulo || 'Sin título'}</td>
+                <td><span class="estado-badge estado-${c.estado}">${c.estado}</span></td>
+                <td>${(c.problemas || []).length}</td>
+                <td>${subs}</td>
+                <td><button class="btn-tbl" onclick="window._exportarConcurso('${c.id}')"><i class="fa-solid fa-file-csv"></i></button></td>
+            </tr>`;
+        }).join('')
+        : '<tr><td colspan="5" style="text-align:center;padding:2rem;opacity:.4;">No hay concursos aún.</td></tr>';
+
+    window._exportarConcurso = (id) => {
+        const subs = AuthState.db.getSubmissionsByConcurso(id);
+        const csv = 'Equipo,Problema,Veredicto,Tiempo(ms),Timestamp\n' +
+            subs.map(s => `${s.equipo},${s.problema_id},${s.veredicto},${s.tiempo_ms},${s.ts}`).join('\n');
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a'); a.href = url; a.download = `concurso_${id}.csv`; a.click();
+        URL.revokeObjectURL(url);
+    };
+}

@@ -1,0 +1,1096 @@
+:root {
+    /* Paleta Institucional TecNM & Gobierno de México */
+    --gob-guinda: #9d2449;
+    --gob-oro: #b38e5d;
+    --tecnm-blue: #1B396A;
+    --tecnm-blue-light: #2A5298;
+    --tecnm-gold: #D6A133;
+    --tecnm-gold-hover: #e8b13d;
+    --tecnm-gray-bg: #0d1626;
+    /* Fondo oscuro global de la landing */
+    --tecnm-white: #FFFFFF;
+    --tecnm-text-main: #e2e8f0;
+    /* Texto claro por defecto */
+    --tecnm-text-muted: #94a3b8;
+
+    /* Estados Semánticos (Juez) */
+    --status-ac: #28A745;
+    /* Accepted (Verde) */
+    --status-wa: #DC3545;
+    /* Wrong Answer (Rojo) */
+    --status-tle: #FFC107;
+    /* Time Limit Exceeded (Amarillo) */
+    --status-pending: #17A2B8;
+    /* Validating (Azul cian) */
+
+    /* Sombras y Radios */
+    --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
+    --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+    --radius-md: 8px;
+    --radius-lg: 12px;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+body {
+    background-color: var(--tecnm-gray-bg);
+    color: var(--tecnm-text-main);
+    line-height: 1.6;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* UTILIDADES Y COMPONENTES GLOBALES */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.75rem 1.5rem;
+    font-weight: 600;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+    border: none;
+    font-size: 1rem;
+}
+
+.btn-primary {
+    background-color: var(--tecnm-blue);
+    color: var(--tecnm-white);
+}
+
+.btn-primary:hover {
+    background-color: var(--tecnm-blue-light);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+}
+
+.btn-accent {
+    background-color: var(--tecnm-gold);
+    color: var(--tecnm-white);
+}
+
+.btn-accent:hover {
+    background-color: var(--tecnm-gold-hover);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+}
+
+.card {
+    background: rgba(17, 24, 39, 0.7);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 2rem;
+    border-top: 4px solid var(--tecnm-gold);
+    backdrop-filter: blur(10px);
+}
+
+/* Tablas Juez y Coach */
+table.coach-table,
+table.scoreboard-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+table.coach-table th,
+table.scoreboard-table th {
+    text-align: left;
+    padding: 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--tecnm-text-muted);
+}
+
+table.coach-table td,
+table.scoreboard-table td {
+    padding: 12px 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.coach-empty-state {
+    text-align: center;
+    padding: 2rem;
+    color: var(--tecnm-text-muted);
+    font-style: italic;
+}
+
+.form-group {
+    margin-bottom: 1.5rem;
+}
+
+.form-label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+    color: var(--tecnm-text-main);
+}
+
+.form-input {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: var(--radius-md);
+    font-size: 1rem;
+    color: var(--tecnm-white);
+    transition: all 0.2s;
+}
+
+.form-input::placeholder {
+    color: rgba(255, 255, 255, 0.3);
+}
+
+.form-input:focus {
+    outline: none;
+    border-color: var(--tecnm-gold);
+    background: rgba(255, 255, 255, 0.1);
+    box-shadow: 0 0 0 3px rgba(214, 161, 51, 0.2);
+}
+
+/* ESTRUCTURA PRINCIPAL DEL APP ROOT */
+#app-root {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: calc(100vh - 70px - 280px);
+    /* altura viewport - navbar - footer estimado */
+}
+
+/* NAVBAR INSTITUCIONAL */
+.navbar {
+    background-color: var(--tecnm-blue);
+    color: var(--tecnm-white);
+    padding: 1rem 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: var(--shadow-md);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.navbar-brand {
+    font-size: 1.5rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    letter-spacing: 1px;
+}
+
+.navbar-brand .accent {
+    color: var(--tecnm-gold);
+}
+
+.navbar-menu {
+    display: flex;
+    gap: 1.5rem;
+    align-items: center;
+}
+
+.nav-link {
+    color: var(--tecnm-white);
+    text-decoration: none;
+    font-weight: 500;
+    opacity: 0.9;
+    transition: opacity 0.2s;
+    cursor: pointer;
+}
+
+.nav-link:hover {
+    opacity: 1;
+}
+
+/* ANIMACIONES GLOBALES VISTAS SPA */
+.view-enter {
+    animation: fadeIn 0.3s ease-out forwards;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* LAYOUT CENTRAL (LANDING/LOGIN) */
+.center-layout {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+}
+
+/* SPLIT PANE PARA LA ARENA */
+.arena-layout {
+    display: flex;
+    flex: 1;
+    height: calc(100vh - 70px);
+    /* 100vh menos navbar */
+    overflow: hidden;
+}
+
+.arena-panel {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1.5rem;
+}
+
+.arena-panel-left {
+    background-color: var(--tecnm-white);
+    border-right: 1px solid #e9ecef;
+}
+
+.arena-panel-right {
+    background-color: #1e1e1e;
+    /* Fondo oscuro para el editor de código */
+    color: #e4e4e4;
+    display: flex;
+    flex-direction: column;
+}
+
+.code-editor-header {
+    background-color: #2d2d2d;
+    padding: 0.5rem 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.85rem;
+    border-bottom: 2px solid var(--tecnm-gold);
+}
+
+.code-textarea {
+    flex: 1;
+    background: transparent;
+    color: #d4d4d4;
+    border: none;
+    padding: 1rem;
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 1rem;
+    resize: none;
+    outline: none;
+}
+
+/* ══════════════════════════════════════════
+   CINTILLO SUPERIOR INSTITUCIONAL  
+   Fondo azul TecNM — logo forzado a blanco con CSS filter
+══════════════════════════════════════════ */
+.cintillo-top {
+    background-color: var(--tecnm-blue);
+    padding: 0.45rem 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 3px solid var(--tecnm-gold);
+}
+
+.cintillo-logo-link {
+    display: flex;
+    align-items: center;
+}
+
+.cintillo-logo {
+    height: 44px;
+    object-fit: contain;
+    /* Convierte cualquier logo a blanco puro para que contraste con el fondo azul */
+    filter: brightness(0) invert(1);
+}
+
+.cintillo-nav {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.cintillo-nav a {
+    color: rgba(255, 255, 255, 0.85);
+    text-decoration: none;
+    font-size: 0.8rem;
+    transition: color 0.2s;
+}
+
+.cintillo-nav a:hover {
+    color: var(--tecnm-gold);
+}
+
+.cintillo-sep {
+    color: rgba(255, 255, 255, 0.25);
+    font-size: 0.75rem;
+}
+
+/* ══════════════════════════════════════════
+   NAVBAR — Doble logo TecNM + ITCM
+══════════════════════════════════════════ */
+.navbar-logos {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex-shrink: 0;
+}
+
+.navbar-logo-tecnm {
+    height: 44px;
+    width: auto;
+    object-fit: contain;
+    filter: brightness(0) invert(1);
+    /* Logo TecNM blanco sobre azul */
+}
+
+.navbar-logo-divider {
+    width: 1px;
+    height: 36px;
+    background-color: rgba(255, 255, 255, 0.3);
+}
+
+.navbar-itcm-logo {
+    height: 52px;
+    width: auto;
+    object-fit: contain;
+    transition: transform 0.2s ease;
+    flex-shrink: 0;
+}
+
+.navbar-itcm-logo:hover {
+    transform: scale(1.05);
+}
+
+.navbar-title-block {
+    display: flex;
+    flex-direction: column;
+}
+
+.navbar-title-main {
+    font-size: 1.1rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+}
+
+.navbar-title-sub {
+    font-size: 0.6rem;
+    font-weight: 300;
+    letter-spacing: 0.8px;
+    opacity: 0.65;
+    text-transform: uppercase;
+}
+
+/* ══════════════════════════════════════════
+   FOOTER TecNM — contenido centrado en max-width
+══════════════════════════════════════════ */
+.footer-tecnm {
+    background-color: var(--tecnm-blue);
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 0.9rem;
+}
+
+.footer-inner {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 2.5rem 2rem 1rem;
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr;
+    gap: 2.5rem;
+}
+
+.footer-logo-wrapper {
+    background-color: rgba(255, 255, 255, 0.1);
+    border-radius: var(--radius-md);
+    padding: 1rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 0.75rem;
+    max-width: 180px;
+}
+
+.footer-logo-wrapper img {
+    height: 48px;
+    object-fit: contain;
+    filter: brightness(0) invert(1);
+}
+
+.footer-desc {
+    font-size: 0.82rem;
+    opacity: 0.65;
+    line-height: 1.5;
+}
+
+.footer-heading {
+    color: var(--tecnm-gold);
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.footer-list {
+    list-style: none;
+    padding: 0;
+    line-height: 2.1;
+}
+
+.footer-list a {
+    color: rgba(255, 255, 255, 0.7);
+    text-decoration: none;
+    cursor: pointer;
+    font-size: 0.88rem;
+    transition: color 0.2s;
+}
+
+.footer-list a:hover {
+    color: var(--tecnm-gold);
+}
+
+.footer-bottom {
+    grid-column: 1 / -1;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    padding-top: 1.25rem;
+    text-align: center;
+    font-size: 0.78rem;
+    opacity: 0.5;
+    margin-top: 0.5rem;
+}
+
+/* ══════════════════════════════════════════
+   FOOTER — Escudo ITCM con Texto Institucional
+══════════════════════════════════════════ */
+.footer-brand-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.footer-itcm-logo {
+    height: 70px;
+    width: auto;
+    object-fit: contain;
+    flex-shrink: 0;
+    /* Sin filter — el escudo dorado resalta también sobre el azul oscuro del footer */
+}
+
+.footer-inst-name {
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: var(--tecnm-white);
+    line-height: 1.3;
+}
+
+.footer-inst-sub {
+    font-size: 0.78rem;
+    color: var(--tecnm-gold);
+    font-weight: 600;
+    margin-top: 0.2rem;
+    line-height: 1.3;
+}
+
+/* ════════════════════════════════════════════
+   RESPONSIVE — Tablet (≤ 900px)
+════════════════════════════════════════════ */
+@media (max-width: 900px) {
+
+    /* Navbar: ocultar subtítulo y reducir logos */
+    .navbar {
+        padding: 0.8rem 1.2rem;
+    }
+
+    .navbar-title-sub {
+        display: none;
+    }
+
+    .navbar-logo-tecnm {
+        height: 34px;
+    }
+
+    .navbar-itcm-logo {
+        height: 40px;
+    }
+
+    /* Footer: 2 columnas en tablet */
+    .footer-inner {
+        grid-template-columns: 1fr 1fr;
+        padding: 2rem 1.5rem 1rem;
+    }
+
+    /* Split-pane arena: apilar verticalmente */
+    .arena-layout {
+        flex-direction: column;
+        height: auto;
+    }
+
+    .arena-panel {
+        height: 50vh;
+    }
+}
+
+/* ════════════════════════════════════════════
+   RESPONSIVE — Móvil (≤ 600px)
+════════════════════════════════════════════ */
+@media (max-width: 600px) {
+
+    /* Navbar móvil: compacto */
+    .navbar {
+        padding: 0.7rem 1rem;
+        gap: 0.5rem;
+    }
+
+    .navbar-brand {
+        gap: 0.5rem;
+    }
+
+    .navbar-logos {
+        gap: 0.4rem;
+    }
+
+    .navbar-logo-tecnm {
+        height: 28px;
+    }
+
+    .navbar-itcm-logo {
+        height: 34px;
+    }
+
+    .navbar-logo-divider {
+        height: 26px;
+    }
+
+    .navbar-title-main {
+        font-size: 0.95rem;
+    }
+
+    .navbar-title-sub {
+        display: none;
+    }
+
+    .navbar-menu {
+        gap: 0.75rem;
+    }
+
+    .nav-link {
+        font-size: 0.82rem;
+    }
+
+    /* Tarjeta Landing centrada y sin tanto padding */
+    .card {
+        padding: 1.5rem 1.2rem;
+    }
+
+    .center-layout {
+        padding: 1rem;
+    }
+
+    /* Footer: 1 columna en móvil */
+    .footer-inner {
+        grid-template-columns: 1fr;
+        padding: 1.5rem 1rem 0.5rem;
+        gap: 1.5rem;
+    }
+
+    /* Escudo ITCM más pequeño en footer */
+    .footer-itcm-logo {
+        height: 52px;
+    }
+
+    /* Ocultar botón de volver en texto */
+    #btn-volver span {
+        display: none;
+    }
+
+    /* Dashboard Coach: 1 columna */
+    [style*="grid-template-columns: 1fr 2fr"] {
+        display: flex !important;
+        flex-direction: column !important;
+    }
+}
+
+/* ════════════════════════════════════════════
+   RESPONSIVE — Muy pequeño (≤ 380px)
+════════════════════════════════════════════ */
+@media (max-width: 380px) {
+    .navbar-logos {
+        gap: 0.25rem;
+    }
+
+    /* ==========================================================
+   Fase 3: Animaciones de Transición & Empty States
+========================================================== */
+
+    /* Transición suave entre vistas (Spas) */
+    .view-enter {
+        animation: fadeSlideUp 0.4s ease forwards;
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    @keyframes fadeSlideUp {
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    /* Empty States bonitos */
+    .coach-empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 3rem 1rem;
+        text-align: center;
+        opacity: 0.6;
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px dashed rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
+        margin: 1rem 0;
+    }
+
+    .coach-empty-state i {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+        color: var(--tecnm-blue);
+    }
+
+    .coach-empty-state p {
+        margin: 0;
+        max-width: 300px;
+    }
+
+    .navbar-logo-tecnm {
+        height: 24px;
+    }
+
+    .navbar-itcm-logo {
+        height: 28px;
+    }
+
+    .navbar-menu {
+        gap: 0.5rem;
+    }
+
+    .nav-link {
+        font-size: 0.78rem;
+    }
+
+    .navbar-title-main {
+        font-size: 0.85rem;
+    }
+}
+
+/* ════════════════════════════════════════════
+   LANDING ICPC — Diseño Competitivo Profesional
+   Inspirado en plataformas reales de competitive programming
+════════════════════════════════════════════ */
+
+.landing-hero {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+/* ── Hero Section: fondo oscuro, dos columnas ── */
+.hero-section {
+    background: #0d1626;
+    /* azul muy oscuro casi negro */
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1.1fr 0.9fr;
+    gap: 0;
+    min-height: calc(100vh - 70px - 250px);
+    position: relative;
+    overflow: hidden;
+}
+
+
+
+
+/* ── Lado izquierdo: contenido del hero ── */
+.hero-content {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 4rem 3rem 4rem 4rem;
+    color: white;
+    position: relative;
+    z-index: 1;
+}
+
+/* Badge de estado pulsante */
+.hero-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: rgba(214, 161, 51, 0.08);
+    border: 1px solid rgba(214, 161, 51, 0.25);
+    border-radius: 4px;
+    padding: 0.3rem 0.8rem;
+    margin-bottom: 1.75rem;
+    width: fit-content;
+}
+
+.badge-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #4ade80;
+    animation: pulseDot 2s ease-in-out infinite;
+    flex-shrink: 0;
+}
+
+@keyframes pulseDot {
+
+    0%,
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+
+    50% {
+        opacity: 0.5;
+        transform: scale(0.8);
+    }
+}
+
+.badge-mono {
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 2px;
+    color: rgba(214, 161, 51, 0.9);
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+/* Título principal */
+.hero-heading {
+    font-size: clamp(2.4rem, 4vw, 3.5rem);
+    font-weight: 700;
+    line-height: 1.08;
+    letter-spacing: -1.5px;
+    margin-bottom: 1.5rem;
+    color: #ffffff;
+    font-family: 'Space Grotesk', 'Inter', sans-serif;
+}
+
+.hero-heading-accent {
+    color: var(--tecnm-gold);
+}
+
+.hero-heading-muted {
+    color: rgba(255, 255, 255, 0.35);
+    font-weight: 300;
+    letter-spacing: -0.5px;
+}
+
+/* Prompt estilo terminal */
+.hero-terminal {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 6px;
+    padding: 0.6rem 1rem;
+    margin-bottom: 2.5rem;
+    width: fit-content;
+    max-width: 100%;
+    overflow: hidden;
+}
+
+.terminal-prompt {
+    color: #4ade80;
+    font-family: monospace;
+    font-weight: 700;
+    font-size: 0.9rem;
+}
+
+.terminal-text {
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 0.78rem;
+    color: rgba(255, 255, 255, 0.55);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.terminal-cursor {
+    color: var(--tecnm-gold);
+    animation: blink 1.2s step-end infinite;
+    font-size: 0.85rem;
+    line-height: 1;
+    flex-shrink: 0;
+}
+
+@keyframes blink {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0;
+    }
+}
+
+/* Stats horizontales */
+.hero-stats {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+}
+
+.hstat {
+    display: flex;
+    flex-direction: column;
+}
+
+.hstat-value {
+    font-size: 1.6rem;
+    font-weight: 800;
+    color: white;
+    font-family: 'Consolas', monospace;
+    line-height: 1;
+}
+
+.hstat-label {
+    font-size: 0.7rem;
+    color: rgba(255, 255, 255, 0.4);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-top: 0.2rem;
+}
+
+.hstat-divider {
+    width: 1px;
+    height: 2.5rem;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+/* ── Lado derecho: panel de acceso ── */
+.hero-access {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 3rem 4rem 3rem 3rem;
+    gap: 1.25rem;
+    background: rgba(255, 255, 255, 0.015);
+    position: relative;
+    z-index: 1;
+}
+
+.ha-card {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    padding: 1.25rem;
+    transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.ha-card:hover {
+    background: rgba(255, 255, 255, 0.07);
+    border-color: rgba(255, 255, 255, 0.14);
+}
+
+
+
+.ha-card--alumno:hover {
+    border-color: rgba(214, 161, 51, 0.3);
+}
+
+.ha-card-header {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-start;
+    margin-bottom: 1rem;
+}
+
+.ha-icon {
+    font-size: 1.4rem;
+    color: rgba(255, 255, 255, 0.5);
+    margin-top: 0.1rem;
+    flex-shrink: 0;
+}
+
+.ha-icon--gold {
+    color: var(--tecnm-gold);
+}
+
+.ha-role {
+    font-size: 1rem;
+    font-weight: 700;
+    color: white;
+    margin-bottom: 0.35rem;
+}
+
+.ha-desc {
+    font-size: 0.82rem;
+    color: rgba(255, 255, 255, 0.45);
+    line-height: 1.5;
+}
+
+/* Botones estilo ICPC */
+.btn-icpc {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1.1rem;
+    border: none;
+    border-radius: 6px;
+    font-size: 0.88rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.18s ease;
+    font-family: 'Inter', sans-serif;
+    letter-spacing: 0.2px;
+}
+
+.btn-icpc--primary {
+    background: var(--tecnm-blue);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.btn-icpc--primary:hover {
+    background: var(--tecnm-blue-light);
+    transform: translateX(2px);
+}
+
+.btn-icpc--gold {
+    background: var(--tecnm-gold);
+    color: #1a1a1a;
+}
+
+.btn-icpc--gold:hover {
+    background: #e8b13d;
+    transform: translateX(2px);
+}
+
+.ha-note {
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.3);
+    margin-top: 0.25rem;
+    line-height: 1.4;
+}
+
+.ha-note code {
+    background: rgba(255, 255, 255, 0.07);
+    padding: 0.1rem 0.4rem;
+    border-radius: 3px;
+    font-family: monospace;
+    font-size: 0.72rem;
+    color: rgba(255, 255, 255, 0.5);
+}
+
+/* ── Banda de características ── */
+.feature-band {
+    background: #111827;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.1rem 2rem;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+}
+
+.feature-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.82rem;
+    color: rgba(255, 255, 255, 0.45);
+    white-space: nowrap;
+}
+
+.feature-item i {
+    color: var(--tecnm-gold);
+    font-size: 0.75rem;
+}
+
+.fband-sep {
+    width: 1px;
+    height: 1rem;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+/* ── Responsive ── */
+@media (max-width: 900px) {
+    .hero-section {
+        grid-template-columns: 1fr;
+        min-height: auto;
+    }
+
+    .hero-section::after {
+        display: none;
+    }
+
+    .hero-content {
+        padding: 3rem 2rem 2rem;
+    }
+
+    .hero-access {
+        padding: 2rem;
+        background: #0d1626;
+        border-top: 1px solid rgba(255, 255, 255, 0.07);
+    }
+
+    .hero-heading {
+        font-size: 2.2rem;
+    }
+}
+
+@media (max-width: 600px) {
+    .hero-content {
+        padding: 2rem 1.25rem;
+    }
+
+    .hero-heading {
+        font-size: 1.8rem;
+        letter-spacing: -0.5px;
+    }
+
+    .hero-stats {
+        gap: 1rem;
+    }
+
+    .hstat-value {
+        font-size: 1.2rem;
+    }
+
+    .terminal-text {
+        font-size: 0.7rem;
+    }
+
+    .hero-access {
+        padding: 1.5rem 1.25rem;
+    }
+
+    .feature-band {
+        gap: 1rem;
+        padding: 1rem;
+    }
+
+    .fband-sep {
+        display: none;
+    }
+
+    .feature-item {
+        font-size: 0.75rem;
+    }
+}

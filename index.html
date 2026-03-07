@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plataforma ICPC - TecNM | ITCM</title>
+    <meta name="description"
+        content="Plataforma Oficial de Concursos de Programación del Instituto Tecnológico de Ciudad Madero — TecNM.">
+    <link rel="stylesheet" href="./css/style.css">
+    <link rel="stylesheet" href="./css/panel.css">
+    <link rel="stylesheet" href="./css/modal.css">
+    <!-- Iconos y Fuentes -->
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Integración Backend en Tiempo Real: Supabase -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+
+<body>
+
+    <!-- ═══════════════════════════════════════════════════════════
+         NAVBAR PRINCIPAL — Logo + Título + Navegación
+    ═══════════════════════════════════════════════════════════════ -->
+    <nav class="navbar" id="main-navbar">
+        <div class="navbar-brand">
+            <!-- Logotipos institucionales: TecNM + ITCM -->
+            <div class="navbar-logos">
+                <img src="image.png" alt="Logo TecNM" class="navbar-logo-tecnm">
+                <div class="navbar-logo-divider"></div>
+                <img src="images-removebg-preview.png" alt="Escudo ITCM" class="navbar-itcm-logo">
+            </div>
+            <div class="navbar-title-block">
+                <span class="navbar-title-main">ICPC <span class="accent">TecNM</span></span>
+                <span class="navbar-title-sub">Instituto Tecnológico de Ciudad Madero</span>
+            </div>
+        </div>
+        <div class="navbar-menu" id="navbar-menu">
+            <a href="#" class="nav-link" data-route="/" id="nav-inicio">Inicio</a>
+            <a href="#" class="nav-link" data-route="/practica">
+                <i class="fa-solid fa-flask" style="margin-right: 4px;"></i> Área de Práctica
+            </a>
+        </div>
+    </nav>
+
+    <!-- ═══════════════════════════════════════════════════════════
+         CONTENIDO PRINCIPAL DE LA SPA (renderizado por JS)
+    ═══════════════════════════════════════════════════════════════ -->
+    <div id="app-root"></div>
+
+    <!-- ═══════════════════════════════════════════════════════════
+         FOOTER INSTITUCIONAL TecNM / ITCM
+    ═══════════════════════════════════════════════════════════════ -->
+    <footer class="footer-tecnm">
+        <div class="footer-inner">
+            <!-- Columna 1: Info Institucional con Escudo ITCM -->
+            <div class="footer-col">
+                <div class="footer-brand-row">
+                    <img src="images-removebg-preview.png" alt="Escudo ITCM" class="footer-itcm-logo">
+                    <div>
+                        <p class="footer-inst-name">Tecnológico Nacional de México</p>
+                        <p class="footer-inst-sub">Instituto Tecnológico de Ciudad Madero</p>
+                    </div>
+                </div>
+                <p class="footer-desc" style="margin-top: 1rem;">
+                    Av. 1º de Mayo esq. Sor Juana Inés de la Cruz<br>
+                    Col. Los Mangos, Cd. Madero, Tamaulipas
+                </p>
+                <p class="footer-desc" style="margin-top: 0.5rem;">
+                    <a href="https://www.cdmadero.tecnm.mx/" target="_blank" style="color: var(--tecnm-gold);">
+                        www.cdmadero.tecnm.mx
+                    </a>
+                </p>
+            </div>
+            <!-- Columna 2: Plataforma -->
+            <div class="footer-col">
+                <h4 class="footer-heading">Plataforma ICPC</h4>
+                <ul class="footer-list">
+                    <li><a href="#" data-route="/">Inicio</a></li>
+                    <li><a href="#" data-route="/login-coach">Acceso Coach</a></li>
+                    <li><a href="#" data-route="/checkin-alumno">Check-in Alumno</a></li>
+                    <li><a href="#" data-route="/practica">Área de Práctica</a></li>
+                </ul>
+            </div>
+            <!-- Columna 3: Institución -->
+            <div class="footer-col">
+                <h4 class="footer-heading">Institución</h4>
+                <ul class="footer-list">
+                    <li><a href="https://www.tecnm.mx/" target="_blank">TecNM Oficial</a></li>
+                    <li><a href="https://www.cdmadero.tecnm.mx/" target="_blank">ITCM — Cd. Madero</a></li>
+                    <li><a href="https://www.cdmadero.tecnm.mx/index.php/admision/convocatoria-licenciatura"
+                            target="_blank">Admisiones ITCM</a></li>
+                </ul>
+            </div>
+            <!-- Línea de Copyright + Creado Por -->
+            <div class="footer-bottom">
+                <p>© 2026 Plataforma ICPC · Instituto Tecnológico de Ciudad Madero — TecNM. Todos los derechos
+                    reservados.</p>
+                <p style="margin-top: 0.4rem; opacity: 0.6;">
+                    Desarrollado por <strong style="color: var(--tecnm-gold);">Jesús Javier Hernández Olvera</strong> —
+                    Ingeniería en Sistemas Computacionales, ITCM
+                </p>
+            </div>
+        </div><!-- /.footer-inner -->
+    </footer>
+
+    <!-- Lógica principal de la SPA -->
+    <script type="module" src="js/main.js"></script>
+</body>
+
+</html>
