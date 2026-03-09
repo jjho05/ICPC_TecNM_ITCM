@@ -3,6 +3,7 @@ import { JudgeSim, VEREDICTOS } from '../core/judgeSim.js';
 import { Judge0 } from '../core/judge0.js';
 import { ConcursoSecurity } from '../core/concursoSecurity.js';
 import { UIModal } from './ui/modal.js';
+import { UIToast } from './ui/toast.js';
 
 // ══════════════════════════════════════════════════════
 //  La Arena — Editor de código + Juez + Scoreboard
@@ -449,7 +450,7 @@ async function enviarClarificacion(concursoId) {
     const probId = document.getElementById('clarif-problema-sel')?.value || null;
     const btn = document.getElementById('btn-enviar-clarif');
 
-    if (!pregunta) { UIModal.alert('Campo vacío', 'Escribe tu pregunta antes de enviar.'); return; }
+    if (!pregunta) { UIToast.warn('Campo vacío', 'Escribe tu pregunta antes de enviar.'); return; }
 
     btn.disabled = true;
     btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
@@ -462,11 +463,11 @@ async function enviarClarificacion(concursoId) {
     });
 
     if (error) {
-        UIModal.alert('Error', 'No se pudo enviar la clarificación.');
+        UIToast.error('Error', 'No se pudo enviar la clarificación.');
     } else {
         document.getElementById('clarif-pregunta').value = '';
         await cargarMisClarificaciones(concursoId);
-        UIModal.alert('✅ Enviada', 'Tu clarificación fue enviada al Juez. Revisa aquí la respuesta.');
+        UIToast.success('✅ Enviada', 'Tu clarificación fue enviada al Juez.');
     }
 
     btn.disabled = false;

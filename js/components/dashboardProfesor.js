@@ -228,6 +228,44 @@ export const DashboardProfesorView = () => {
                 </div>
             </section>
 
+            <!-- TAB 6: Estadísticas del Evento (V5) -->
+            <section id="ptab-estadisticas" class="ctab-content" style="display:none;">
+                <div class="coach-card coach-card--full">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <h3 class="coach-card-title"><i class="fa-solid fa-chart-line"></i> Estad&#237;sticas: <span id="stats-concurso-titulo">...</span></h3>
+                        <button class="btn btn-ghost" onclick="renderProfesorTab('ptab-admin-juez')"><i class="fa-solid fa-arrow-left"></i> Volver a Gesti&#243;n</button>
+                    </div>
+                    
+                    <div style="display:grid; grid-template-columns: 2fr 1fr; gap:2rem; margin-top:2rem;">
+                        <div class="coach-card" style="background: rgba(0,0,0,0.2);">
+                            <h4 style="margin-top:0;"><i class="fa-solid fa-timeline"></i> L&#237;nea de Tiempo (Actividad AC/WA)</h4>
+                            <div style="height:300px;"><canvas id="chart-actividad-concurso"></canvas></div>
+                        </div>
+                        <div class="coach-card" style="background: rgba(0,0,0,0.2);">
+                            <h4 style="margin-top:0;"><i class="fa-solid fa-pie-chart"></i> Veredictos Globales</h4>
+                            <div style="height:300px;"><canvas id="chart-veredictos-concurso"></canvas></div>
+                        </div>
+                    </div>
+
+                    <div class="coach-card" style="margin-top:2rem; border-top:3px solid var(--tecnm-blue);">
+                        <h4 style="margin-top:0;"><i class="fa-solid fa-brain"></i> Dificultad Real por Problema</h4>
+                        <div class="coach-table-wrap">
+                            <table class="coach-table">
+                                <thead>
+                                    <tr>
+                                        <th>Problema</th>
+                                        <th>Ratio de &#201;xito</th>
+                                        <th>Tiempo 1er AC</th>
+                                        <th>Nivel Estimado</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="stats-problemas-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
         </div>
     </div>`;
 };
@@ -337,6 +375,7 @@ function renderProfesorTab(tabId) {
     if (tabId === 'ptab-mis-eventos') renderMisEventosJuez();
     if (tabId === 'ptab-mis-equipos') renderMisEventosCoach();
     if (tabId === 'ptab-explorar') renderExplorarEventos();
+    if (tabId === 'ptab-estadisticas') renderContestAnalytics(window.currentAdminConcursoId);
 }
 
 // ── Renderizadores de Listas (Vistas base - Supabase Async) ──
@@ -551,8 +590,11 @@ async function renderAdminJuezDetalles() {
             <button class="btn btn-primary btn-sm" onclick="window.exportarResultadosCSV('${c.id}')">
                 <i class="fa-solid fa-file-csv"></i> Exportar Resultados (CSV)
             </button>
-            <button class="btn btn-secondary btn-sm" onclick="window.router.navigate('/staff')">
-                <i class="fa-solid fa-parachute-box"></i> Panel de Staff (Globos)
+            <button class="btn btn-secondary btn-sm" onclick="renderProfesorTab('ptab-estadisticas')">
+                <i class="fa-solid fa-chart-pie"></i> Anal&#237;tica del Evento (V5)
+            </button>
+            <button class="btn btn-ghost btn-sm" onclick="window.router.navigate('/staff')">
+                <i class="fa-solid fa-parachute-box"></i> Staff
             </button>
         </div>
     `;
@@ -1073,4 +1115,234 @@ window.renderMonitorConexion = async (concursoId) => {
             </tr>
         `;
     }).join('');
+};
+
+window.renderContestAnalytics = async (concursoId) => {
+    if (!concursoId) return;
+    const statsBody = document.getElementById('stats-problemas-body');
+    if (!statsBody) return;
+
+    statsBody.innerHTML = '<tr><td colspan="4" style="text-align:center;"><i class="fa-solid fa-spinner fa-spin"></i> Procesando datos...</td></tr>';
+
+    const c = await AuthState.db.getConcursoById(concursoId);
+    if (!c) return;
+    document.getElementById('stats-concurso-titulo').textContent = c.titulo;
+
+    const allSubs = await AuthState.db.getSubmissionsByConcurso(concursoId);
+    
+    // 1. Distribución de Veredictos (Pie Chart)
+    const veredictosCount = {};
+    allSubs.forEach(s => {
+        veredictosCount[s.veredicto] = (veredictosCount[s.veredicto] || 0) + 1;
+    });
+
+    renderVeredictosChart(veredictosCount);
+
+    // 2. Línea de Tiempo (Actividad)
+    renderActividadTimeline(allSubs, c.ts_inicio, c.ts_fin);
+
+    // 3. Dificultad por Problema
+    renderDificultadTabla(allSubs, c.problemas);
+};
+
+function renderVeredictosChart(counts) {
+    const ctx = document.getElementById('chart-veredictos-concurso');
+    if (!ctx) return;
+
+    // Destruir anterior si existe
+    if (window._chartVeredictos) window._chartVeredictos.destroy();
+
+    const labels = Object.keys(counts);
+    const data = Object.values(counts);
+    const colors = labels.map(l => l === 'AC' ? '#22c55e' : (l === 'WA' ? '#ef4444' : '#f59e0b'));
+
+    window._chartVeredictos = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: data,
+                backgroundColor: colors,
+                borderWidth: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { position: 'bottom', labels: { color: '#fff' } } }
+        }
+    });
+}
+
+function renderActividadTimeline(subs, tsInicio, tsFin) {
+    const ctx = document.getElementById('chart-actividad-concurso');
+    if (!ctx) return;
+
+    if (window._chartActividad) window._chartActividad.destroy();
+
+    // Agrupar por cubetas de 5 minutos
+    const interval = 5 * 60 * 1000;
+    const duration = tsFin - tsInicio;
+    const numBuckets = Math.ceil(duration / interval);
+    
+    const labels = [];
+    const dataAC = new Array(numBuckets).fill(0);
+    const dataTotal = new Array(numBuckets).fill(0);
+
+    for (let i = 0; i < numBuckets; i++) {
+        const t = tsInicio + (i * interval);
+        labels.push(new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+    }
+
+    subs.forEach(s => {
+        const t = s.timestamp;
+        if (t >= tsInicio && t <= tsFin) {
+            const bucket = Math.floor((t - tsInicio) / interval);
+            if (bucket >= 0 && bucket < numBuckets) {
+                dataTotal[bucket]++;
+                if (s.veredicto === 'AC') dataAC[bucket]++;
+            }
+        }
+    });
+
+    window._chartActividad = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'Aceptados (AC)',
+                    data: dataAC,
+                    borderColor: '#22c55e',
+                    backgroundColor: 'rgba(34, 197, 94, 0.2)',
+                    fill: true,
+                    tension: 0.4
+                },
+                {
+                    label: 'Total Envíos',
+                    data: dataTotal,
+                    borderColor: '#3b82f6',
+                    backgroundColor: 'transparent',
+                    borderDash: [5, 5],
+                    tension: 0.4
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: { ticks: { color: '#888' }, grid: { display: false } },
+                y: { ticks: { color: '#888' }, grid: { color: 'rgba(255,255,255,0.05)' } }
+            },
+            plugins: { legend: { labels: { color: '#fff' } } }
+        }
+    });
+}
+
+async function renderDificultadTabla(subs, probIds) {
+    const body = document.getElementById('stats-problemas-body');
+    if (!body) return;
+
+    const stats = {};
+    probIds.forEach(id => stats[id] = { total: 0, ac: 0, firstAC: Infinity });
+
+    subs.forEach(s => {
+        if (stats[s.problema_id]) {
+            stats[s.problema_id].total++;
+            if (s.veredicto === 'AC') {
+                stats[s.problema_id].ac++;
+                if (s.timestamp < stats[s.problema_id].firstAC) {
+                    stats[s.problema_id].firstAC = s.timestamp;
+                }
+            }
+        }
+    });
+
+    body.innerHTML = probIds.map(pid => {
+        const s = stats[pid];
+        const ratio = s.total > 0 ? ((s.ac / s.total) * 100).toFixed(1) : 0;
+        const timeAC = s.firstAC === Infinity ? '---' : new Date(s.firstAC).toLocaleTimeString();
+        
+        let level = 'Easy';
+        let color = '#22c55e';
+        if (ratio < 30) { level = 'Hard'; color = '#ef4444'; }
+        else if (ratio < 60) { level = 'Medium'; color = '#f59e0b'; }
+
+        return `
+            <tr>
+                <td><strong>${pid}</strong></td>
+                <td>${ratio}% (${s.ac}/${s.total})</td>
+                <td>${timeAC}</td>
+                <td><span style="color:${color}; font-weight:bold;">${level}</span></td>
+            </tr>
+        `;
+    }).join('');
+}
+
+window.exportarProblemBookletPDF = async (concursoId) => {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    const c = await AuthState.db.getConcursoById(concursoId);
+    if (!c) return;
+
+    UIToast.success('Generando Folleto PDF...');
+
+    // Portada
+    doc.setFontSize(22);
+    doc.text("PROBLEM BOOKLET", 105, 80, { align: "center" });
+    doc.setFontSize(18);
+    doc.text(c.titulo, 105, 95, { align: "center" });
+    doc.setFontSize(12);
+    doc.setTextColor(100);
+    doc.text("Instituto Tecnológico de Ciudad Madero - TecNM", 105, 105, { align: "center" });
+    doc.text(`Fecha del Evento: ${new Date(c.fecha_inicio).toLocaleDateString()}`, 105, 115, { align: "center" });
+    doc.setTextColor(0);
+
+    // Iterar Problemas
+    for (let i = 0; i < c.problemas.length; i++) {
+        const pId = c.problemas[i];
+        const p = await AuthState.db.getProblemaById(pId);
+        if (!p) continue;
+
+        doc.addPage();
+        doc.setFontSize(18);
+        doc.text(`Problema ${String.fromCharCode(65 + i)}: ${p.titulo}`, 20, 20);
+        doc.setFontSize(10);
+        doc.setTextColor(100);
+        doc.text(`ID: ${p.id} | Límites: ${p.limite_tiempo || '1.0s'} / ${p.limite_memoria || '256MB'}`, 20, 28);
+        doc.setTextColor(0);
+        doc.line(20, 32, 190, 32);
+
+        // Simulación de renderizado de descripción (Markdown básico a texto)
+        const cleanDesc = p.descripcion
+            .replace(/#/g, '')
+            .replace(/\*\*/g, '')
+            .replace(/\*/g, '')
+            .replace(/!\[.*?\]\(.*?\)/g, '[Imagen]'); // Quitar imágenes por ahora en PDF directo
+            
+        const splitDesc = doc.splitTextToSize(cleanDesc, 170);
+        doc.setFontSize(11);
+        doc.text(splitDesc, 20, 42);
+        
+        // Espacio para ejemplos (si existieran en el objeto problema, asumimos campos opcionales)
+        if (p.ejemplo_entrada) {
+            const y = doc.previousAutoTable ? doc.previousAutoTable.finalY + 10 : 150;
+            doc.setFontSize(12);
+            doc.text("Ejemplo de Entrada", 20, y);
+            doc.setFontSize(10);
+            doc.rect(20, y + 2, 170, 20);
+            doc.text(p.ejemplo_entrada, 25, y + 10);
+        }
+    }
+
+    // Pie de página en todas las hojas (simplificado)
+    const pageCount = doc.internal.getNumberOfPages();
+    for(let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.text(`ICPC TecNM | Generado automáticamente | Página ${i} de ${pageCount}`, 105, 285, { align: "center" });
+    }
+
+    doc.save(`folleto_${c.id}.pdf`);
 };

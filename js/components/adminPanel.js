@@ -319,6 +319,11 @@ export const AdminPanelView = () => {
                         <i class="fa-solid fa-arrows-rotate"></i> Actualizar
                     </button>
                 </div>
+                <div class="admin-filters" style="margin-bottom:1rem;">
+                    <select id="filter-audit-concurso" class="admin-select" onchange="renderAuditoria()">
+                        <option value="">Todos los Concursos / Global</option>
+                    </select>
+                </div>
                 <div class="admin-table-wrap">
                     <table class="admin-table">
                         <thead>
@@ -945,17 +950,33 @@ async function autoTraducirTexto(texto, de = 'en', a = 'es') {
 }
 
 async function renderAuditoria() {
+    const sel = document.getElementById('filter-audit-concurso');
+
+    // Poblar selector si está vacío
+    if (sel && sel.options.length <= 1) {
+        const concs = await AuthState.db.getConcursos();
+        concs.forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c.id;
+            opt.textContent = c.titulo;
+            sel.appendChild(opt);
+        });
+    }
+
     const body = document.getElementById('tabla-auditoria-body');
     if (!body) return;
 
     body.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:1.5rem;opacity:.4;"><i class="fa-solid fa-spinner fa-spin"></i> Cargando logs...</td></tr>';
 
     try {
-        const { data, error } = await supabase
-            .from('icpc_logs_auditoria')
-            .select('*')
-            .order('created_at', { ascending: false })
-            .limit(100);
+        let query = supabase.from('icpc_logs_auditoria').select('*').order('created_at', { ascending: false }).limit(100);
+
+        const concursoId = sel?.value;
+        if (concursoId) {
+            query = query.ilike('detalles', `%${concursoId}%`);
+        }
+
+        const { data, error } = await query;
 
         if (error) throw error;
 
