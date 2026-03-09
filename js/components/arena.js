@@ -1,5 +1,6 @@
 import { AuthState } from '../core/authState.js';
 import { JudgeSim, VEREDICTOS } from '../core/judgeSim.js';
+import { Judge0 } from '../core/judge0.js';
 import { ConcursoSecurity } from '../core/concursoSecurity.js';
 import { UIModal } from './ui/modal.js';
 
@@ -7,9 +8,44 @@ import { UIModal } from './ui/modal.js';
 //  La Arena — Editor de código + Juez + Scoreboard
 // ══════════════════════════════════════════════════════
 
+// ── Templates de código por lenguaje ─────────────────────────────────────
+const CODE_TEMPLATES = {
+    cpp: `#include <bits/stdc++.h>
+using namespace std;
+
+int main() {
+    ios_base::sync_with_stdio(false);
+    cin.tie(NULL);
+    
+    // Tu solución aquí
+    
+    return 0;
+}`,
+    java: `import java.util.*;
+import java.io.*;
+
+public class Main {
+    public static void main(String[] args) throws IOException {
+        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+        
+        // Tu solución aquí
+        
+    }
+}`,
+    python: `import sys
+input = sys.stdin.readline
+
+def solve():
+    # Tu solución aquí
+    pass
+
+solve()`
+};
+
 let arenaTimer = null;
 let concursoEndTime = null;
 let problemaActivo = null;
+
 
 export const ArenaView = () => {
     // Activar modo arena INMEDIATAMENTE (oculta footer/navbar)
@@ -97,6 +133,9 @@ export const ArenaView = () => {
                     <button class="arena-tab" data-apanel="ap-ranking">
                         <i class="fa-solid fa-ranking-star"></i> Ranking
                     </button>
+                    <button class="arena-tab" data-apanel="ap-historial">
+                        <i class="fa-solid fa-clock-rotate-left"></i> Envíos
+                    </button>
                     <button class="arena-tab" data-apanel="ap-clarif" id="arena-tab-clarif">
                         <i class="fa-solid fa-comment-dots"></i> Clarif.
                         <span id="arena-clarif-badge" class="arena-notif-dot" style="display:none;">!</span>
@@ -114,6 +153,19 @@ export const ArenaView = () => {
 
                 <div id="ap-ranking" class="arena-tab-content" style="display:none;">
                     <div id="arena-scoreboard" class="arena-scoreboard-wrap"></div>
+                </div>
+
+                <!-- Panel: Historial de Envíos del equipo -->
+                <div id="ap-historial" class="arena-tab-content" style="display:none;">
+                    <div class="arena-clarif-wrap">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem;">
+                            <h4 class="arena-clarif-title" style="margin:0;"><i class="fa-solid fa-clock-rotate-left"></i> Mis Envíos</h4>
+                            <button class="btn-tbl" id="btn-refresh-historial"><i class="fa-solid fa-rotate"></i></button>
+                        </div>
+                        <div id="arena-historial-list">
+                            <p style="opacity:.4;font-size:.85rem;">Cargando...</p>
+                        </div>
+                    </div>
                 </div>
 
                 <div id="ap-clarif" class="arena-tab-content arena-clarif-wrap" style="display:none;">
@@ -273,7 +325,29 @@ async function initArena() {
     document.getElementById('btn-arena-probar').addEventListener('click', () => probarCodigo(false));
     document.getElementById('btn-arena-enviar').addEventListener('click', () => probarCodigo(true));
     document.getElementById('arena-code').addEventListener('input', updateLineNums);
+
+    // Template inicial
+    const codeEl = document.getElementById('arena-code');
+    const langSel = document.getElementById('arena-lang');
+    codeEl.value = CODE_TEMPLATES[langSel.value] || CODE_TEMPLATES.cpp;
     updateLineNums();
+
+    // Cambio de lenguaje → cargar template si el editor está sin código real
+    langSel.addEventListener('change', () => {
+        const currentCode = codeEl.value.trim();
+        const isTemplate = Object.values(CODE_TEMPLATES).some(t => t.trim() === currentCode);
+        if (!currentCode || isTemplate) {
+            codeEl.value = CODE_TEMPLATES[langSel.value] || '';
+            updateLineNums();
+        }
+    });
+
+    // Ctrl+Enter = Enviar
+    codeEl.addEventListener('keydown', (e) => {
+        if (e.ctrlKey && e.key === 'Enter') { e.preventDefault(); probarCodigo(true); }
+        if (e.key === 'Tab') { e.preventDefault(); const s = codeEl.selectionStart; codeEl.value = codeEl.value.substring(0, s) + '    ' + codeEl.value.substring(codeEl.selectionEnd); codeEl.selectionStart = codeEl.selectionEnd = s + 4; }
+    });
+
 
     // ── Cargar clarificaciones públicas iniciales ─────────────────────
     cargarClarificacionesPublicas(concurso.id);
