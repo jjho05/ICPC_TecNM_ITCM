@@ -42,19 +42,16 @@ export const initRouter = () => {
     // Función para obtener la ruta normalizada ignorando subdirectorios (ej: GitHub Pages)
     const getNormalizedPath = () => {
         let path = window.location.pathname;
-        if (path.includes('index.html')) {
-            path = path.split('index.html')[0];
-        }
-        // Asume que si hay un prefijo de repositorio, lo ignoramos o obtenemos solo el final.
-        // Forma robusta: si startsWith('/') y tiene más segmentos, intentamos extraer la ruta de la APP.
-        // Pero para la SPA que usa history API o anclas, lo mejor es basarse en el hash si fuera hash router.
-        // Como usamos history API, debemos forzar a que el punto de entrada sea '/' lógico.
-        // Obtener el segmento final, o forzar siempre rutas como '/practica', '/arena'.
-        // Si estamos en github pages, pathname es /ICPC_TecNM_ITCM/
         const basePath = '/ICPC_TecNM_ITCM';
+
         if (path.startsWith(basePath)) {
             path = path.slice(basePath.length);
         }
+
+        if (path.includes('index.html')) {
+            path = path.split('index.html')[0];
+        }
+
         if (path === '' || path === '/' || path.endsWith('index.html')) return '/';
         return path;
     };
@@ -65,10 +62,11 @@ export const initRouter = () => {
         navigate(path) {
             if (currentPath === path) return;
             currentPath = path;
-            // Al hacer pushState en subdirectorios hay que tener cuidado. 
-            // Añadir el basePath si estamos empujando a la URL
-            const isProd = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
-            const basePath = isProd ? '/ICPC_TecNM_ITCM' : '';
+
+            // Detectar si estamos en el subdirectorio de GH Pages
+            const hasGHPrefix = window.location.pathname.startsWith('/ICPC_TecNM_ITCM');
+            const basePath = hasGHPrefix ? '/ICPC_TecNM_ITCM' : '';
+
             window.history.pushState({}, '', basePath + path);
             render(path);
         },
