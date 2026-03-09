@@ -287,12 +287,15 @@ function renderTab(tabId) {
     if (tabId === 'tab-concursos') renderConcursos();
 }
 
-function renderBanco() {
+async function renderBanco() {
+    const body = document.getElementById('tabla-problemas-body');
+    if (body) body.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:2rem;opacity:.4;"><i class="fa-solid fa-spinner fa-spin"></i> Cargando...</td></tr>';
+
     const search = document.getElementById('filter-search')?.value?.toLowerCase() || '';
     const diff = document.getElementById('filter-dificultad')?.value || '';
     const fuente = document.getElementById('filter-fuente')?.value || '';
 
-    const todos = AuthState.db.getProblemas();
+    const todos = await AuthState.db.getProblemas();
     bancoFiltrado = todos.filter(p => {
         const matchSearch = !search || p.titulo.toLowerCase().includes(search) || (p.tags || []).join(' ').includes(search);
         const matchDiff = !diff || p.dificultad == diff;
@@ -305,9 +308,7 @@ function renderBanco() {
     const inicio = (bancoPagina - 1) * BANCO_POR_PAGINA;
     const pagina = bancoFiltrado.slice(inicio, inicio + BANCO_POR_PAGINA);
 
-    const body = document.getElementById('tabla-problemas-body');
     if (!body) return;
-
     body.innerHTML = pagina.map((p, i) => `
         <tr>
             <td>${inicio + i + 1}</td>
@@ -324,11 +325,16 @@ function renderBanco() {
 
     renderPaginacion(bancoFiltrado.length);
 
-    // Exponer funciones en window para eventos inline
-    window._adminEditProblema = (id) => abrirEditor(AuthState.db.getProblemaById(id));
+    window._adminEditProblema = async (id) => {
+        const prob = await AuthState.db.getProblemaById(id);
+        abrirEditor(prob);
+    };
     window._adminDeleteProblema = async (id) => {
         if (await UIModal.confirm('Eliminar Problema', '¿Seguro que deseas eliminar este problema del banco?')) {
-            AuthState.db.removeProblema(id); renderBanco();
+            try {
+                await AuthState.db.deleteProblema(id);
+                renderBanco();
+            } catch (e) { UIModal.alert('Error', 'No se pudo eliminar el problema.'); }
         }
     };
 }
@@ -363,30 +369,25 @@ async function importarDeCodeforces() {
     try {
         const res = await fetch('https://codeforces.com/api/problemset.problems');
         const data = await res.json();
-
         if (data.status !== 'OK') throw new Error('API error');
 
         const problemas = data.result.problems
             .filter(p => p.rating && p.rating >= 800 && p.rating <= 2000 && p.tags?.length)
-            .slice(0, 500)
+            .slice(0, 300)
             .map(p => ({
                 id: `cf_${p.contestId}_${p.index}`,
                 titulo: p.name,
                 dificultad: p.rating,
                 tags: p.tags,
                 fuente: 'codeforces',
-                desc: `<h3>${p.name}</h3>
-<p><em>Problema de Codeforces — Ronda ${p.contestId}, Problema ${p.index}</em></p>
-<p>Puedes ver el enunciado completo en:
-<a href="https://codeforces.com/problemset/problem/${p.contestId}/${p.index}" target="_blank" style="color:var(--tecnm-gold);">
-codeforces.com/problemset/problem/${p.contestId}/${p.index}
-</a></p>`,
-                ejemplos: [],
-                testcases: []
+                descripcion: `<h3>${p.name}</h3><p><em>Problema de Codeforces — Ronda ${p.contestId}, Problema ${p.index}</em></p><p>Ver enunciado completo en: <a href="https://codeforces.com/problemset/problem/${p.contestId}/${p.index}" target="_blank" style="color:var(--tecnm-gold);">codeforces.com/problem/${p.contestId}/${p.index}</a></p>`,
+                casos_prueba: [],
+                publicado: true
             }));
 
-        const importados = AuthState.db.saveProblemasLote(problemas);
-        btn.innerHTML = `<i class="fa-solid fa-check"></i> ${importados} importados`;
+        await AuthState.db.saveProblemasLote(problemas);
+        const count = problemas.length;
+        btn.innerHTML = `<i class="fa-solid fa-check"></i> ${count} importados`;
         setTimeout(() => {
             btn.innerHTML = '<i class="fa-solid fa-cloud-arrow-down"></i> Importar de Codeforces';
             btn.disabled = false;
@@ -395,7 +396,7 @@ codeforces.com/problemset/problem/${p.contestId}/${p.index}
     } catch (e) {
         btn.innerHTML = '<i class="fa-solid fa-xmark"></i> Error (sin conexión)';
         btn.disabled = false;
-        setTimeout(() => { btn.innerHTML = '<i class="fa-solid fa-cloud-arrow-down"></i> Importar de Codeforces'; }, 3000);
+        setTimeout(() => { btn.innerHTML = '<i class="fa-solid fa-cloud-arrow-down"></i> Importar de Codeforces'; btn.disabled = false; }, 3000);
     }
 }
 
@@ -456,8 +457,9 @@ function runEditorCode() {
     `;
 }
 
-function guardarProblema(publicar) {
-    const id = document.getElementById('edit-id').value || `admin_${Date.now()}`;
+async function guardarProblema(publicar) {
+    const idEl = document.getElementById('edit-id');
+    const id = idEl.value || `admin_${crypto.randomUUID().slice(0, 8)}`;
     const titulo = document.getElementById('edit-titulo').value.trim();
     const diff = parseInt(document.getElementById('edit-dificultad').value) || 1000;
     const tags = document.getElementById('edit-tags').value.split(',').map(t => t.trim()).filter(Boolean);
@@ -467,15 +469,21 @@ function guardarProblema(publicar) {
 
     const inputs = [...document.querySelectorAll('.tc-input')].map(el => el.value.trim());
     const expecteds = [...document.querySelectorAll('.tc-expected')].map(el => el.value.trim());
-    const testcases = inputs.map((inp, i) => ({ input: inp, expected: expecteds[i] || '' })).filter(tc => tc.input);
-    const ejemplos = testcases.slice(0, 2).map(tc => ({ input: tc.input, output: tc.expected }));
+    const casos_prueba = inputs.map((inp, i) => ({ input: inp, output: expecteds[i] || '' })).filter(tc => tc.input);
 
-    AuthState.db.saveProblema({
-        id, titulo, dificultad: diff, tags, desc, ejemplos, testcases,
-        fuente: 'admin', publicado: publicar
-    });
-
-    renderTab('tab-banco');
+    try {
+        await AuthState.db.saveProblema({
+            id, titulo, dificultad: diff, tags,
+            descripcion: desc,
+            casos_prueba,
+            fuente: 'admin',
+            publicado: publicar,
+            creado_por: AuthState.user.email || 'admin'
+        });
+        renderTab('tab-banco');
+    } catch (e) {
+        UIModal.alert('Error', 'No se pudo guardar el problema. Verifica la conexión con Supabase.');
+    }
 }
 
 function renderProfesores() {
@@ -520,31 +528,38 @@ async function saveProfesor() {
     renderProfesores();
 }
 
-function renderConcursos() {
+async function renderConcursos() {
     const body = document.getElementById('tabla-concursos-body');
     if (!body) return;
-    const concursos = AuthState.db.getConcursos();
-    body.innerHTML = concursos.length
-        ? concursos.map(c => {
-            const subs = AuthState.db.getSubmissionsByConcurso(c.id).length;
-            return `
-            <tr>
-                <td>${c.titulo || 'Sin título'}</td>
-                <td><span class="estado-badge estado-${c.estado}">${c.estado}</span></td>
-                <td>${(c.problemas || []).length}</td>
-                <td>${subs}</td>
-                <td><button class="btn-tbl" onclick="window._exportarConcurso('${c.id}')"><i class="fa-solid fa-file-csv"></i></button></td>
-            </tr>`;
-        }).join('')
-        : '<tr><td colspan="5" style="text-align:center;padding:2rem;opacity:.4;">No hay concursos aún.</td></tr>';
+    body.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:1.5rem;opacity:.4;"><i class="fa-solid fa-spinner fa-spin"></i></td></tr>';
 
-    window._exportarConcurso = (id) => {
-        const subs = AuthState.db.getSubmissionsByConcurso(id);
+    const concursos = await AuthState.db.getConcursos();
+    if (!concursos.length) {
+        body.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:2rem;opacity:.4;">No hay concursos aún.</td></tr>';
+        return;
+    }
+
+    const rows = await Promise.all(concursos.map(async c => {
+        return `
+        <tr>
+            <td>${c.titulo || 'Sin título'}</td>
+            <td><span class="estado-badge estado-${c.estado}">${c.estado}</span></td>
+            <td>${(c.problemas || []).length} problemas</td>
+            <td>—</td>
+            <td>
+                <button class="btn-tbl" onclick="window._exportarConcurso('${c.id}')"><i class="fa-solid fa-file-csv"></i> CSV</button>
+            </td>
+        </tr>`;
+    }));
+    body.innerHTML = rows.join('');
+
+    window._exportarConcurso = async (id) => {
+        const { data: subs } = await supabase.from('icpc_submissions').select('*').eq('concurso_id', id);
+        if (!subs?.length) { UIModal.alert('Sin datos', 'No hay submissions para este concurso.'); return; }
         const csv = 'Equipo,Problema,Veredicto,Tiempo(ms),Timestamp\n' +
-            subs.map(s => `${s.equipo},${s.problema_id},${s.veredicto},${s.tiempo_ms},${s.ts}`).join('\n');
+            subs.map(s => `${s.equipo},${s.problema_id},${s.veredicto},${s.tiempo_ms || 0},${s.ts_servidor || s.timestamp}`).join('\n');
         const blob = new Blob([csv], { type: 'text/csv' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a'); a.href = url; a.download = `concurso_${id}.csv`; a.click();
-        URL.revokeObjectURL(url);
+        const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+        a.download = `concurso_${id}.csv`; a.click();
     };
 }

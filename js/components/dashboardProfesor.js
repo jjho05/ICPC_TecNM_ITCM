@@ -622,26 +622,35 @@ async function renderAdminJuezDetalles() {
     };
 
     window._mostrarSelectorProblemas = async () => {
-        const banco = AuthState.db.getProblemas(); // El banco sigue local por ahora
+        // GAP 1 FIX: ahora lee de Supabase correctamente
+        const banco = await AuthState.db.getProblemas();
         const noAsignados = banco.filter(p => !(c.problemas || []).includes(p.id));
 
         if (noAsignados.length === 0) {
-            UIModal.alert('Banco Vacio', 'No hay más problemas disponibles en el Banco de Problemas.');
+            UIModal.alert('Banco Vacío', 'No hay más problemas disponibles en el Banco de Problemas.');
             return;
         }
 
-        const opciones = noAsignados.slice(0, 10).map(p => `${p.id}: ${p.titulo}`).join('\n');
-        const probIdStr = await UIModal.prompt('Añadir Problema', 'Escribe el ID (ej: cf_x_y o admin_timestamp) del problema a añadir:\n\nDisponibles (primeros 10):\n' + opciones, 'ID del Problema');
+        const opciones = noAsignados.slice(0, 10).map((p, i) => `${String.fromCharCode(65 + i)}. ${p.titulo} [${p.dificultad}]`).join('\n');
+        const probIdStr = await UIModal.prompt(
+            'Añadir Problema al Concurso',
+            `Escribe el ID del problema a añadir:\n\nPrimeros disponibles:\n${opciones}`,
+            'ID del Problema'
+        );
 
         if (probIdStr) {
             const pExacto = banco.find(p => p.id === probIdStr.trim());
             if (pExacto) {
                 if (!c.problemas) c.problemas = [];
-                c.problemas.push(pExacto.id);
-                await AuthState.db.saveConcurso(c); // Guardado Asíncrono
-                renderAdminJuezDetalles();
+                if (!c.problemas.includes(pExacto.id)) {
+                    c.problemas.push(pExacto.id);
+                    await AuthState.db.saveConcurso(c);
+                    renderAdminJuezDetalles();
+                } else {
+                    UIModal.alert('Ya añadido', 'Ese problema ya está en el concurso.');
+                }
             } else {
-                UIModal.alert('Error', 'ID de problema "' + probIdStr + '" no encontrado.');
+                UIModal.alert('Error', `ID "${probIdStr}" no encontrado en el banco.`);
             }
         }
     };
@@ -671,11 +680,11 @@ if (typeof window !== 'undefined') {
     };
 
     window._removerAlumnoCoach = async (alumnoEmail) => {
-        const confirm = await UIModal.confirm('¿Quitar Alumno?', `¿Estás seguro de que deseas eliminar a ${alumnoEmail}?`);
+        const confirm = await UIModal.confirm('¿Quitar Alumno?', `¿Estás seguro de quitar a ${alumnoEmail} del concurso?`);
         if (!confirm) return;
-
         try {
-            await AuthState.db.deleteParticipante(AuthState.user.email, alumnoEmail);
+            // GAP 3 FIX: eliminar de la tabla normalizada con concurso_id
+            await AuthState.db.deleteParticipante(alumnoEmail, window.currentAdminConcursoId);
             await renderAdminCoachAlumnos();
         } catch (e) {
             UIModal.alert('Error', 'No se pudo eliminar al alumno.');
@@ -697,13 +706,12 @@ if (typeof window !== 'undefined') {
             btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Registrando...';
             btn.disabled = true;
         }
-
         try {
-            await AuthState.db.saveParticipante(AuthState.user.email, {
-                nombre: nombreAlu,
-                email: emailAlu,
-                equipo: nombreEq
-            });
+            await AuthState.db.saveParticipante(
+                AuthState.user.email,
+                { nombre: nombreAlu, email: emailAlu, equipo: nombreEq },
+                window.currentAdminConcursoId  // ← GAP 3 FIX: concurso_id obligatorio
+            );
 
             document.getElementById('coach-nuevo-alumno-nombre').value = '';
             document.getElementById('coach-nuevo-alumno-email').value = '';
@@ -711,7 +719,12 @@ if (typeof window !== 'undefined') {
 
             await renderAdminCoachAlumnos();
         } catch (error) {
-            UIModal.alert('Error', 'Hubo un problema al registrar al alumno.');
+            console.error(error);
+            if (error.message?.includes('unique')) {
+                UIModal.alert('Ya registrado', 'Este correo ya está inscrito en este concurso.');
+            } else {
+                UIModal.alert('Error', 'No se pudo registrar al alumno. Verifica la conexión.');
+            }
         } finally {
             if (btn) {
                 btn.innerHTML = '<i class="fa-solid fa-plus"></i> Inscribir Equipo';
@@ -724,26 +737,35 @@ if (typeof window !== 'undefined') {
 async function renderAdminCoachAlumnos() {
     if (!window.currentAdminConcursoId) return;
     const body = document.getElementById('admin-coach-alumnos-body');
-    body.innerHTML = '<tr><td colspan="3" style="text-align:center;"><i class="fa-solid fa-spinner fa-spin"></i> Cargando...</td></tr>';
+    if (!body) return;
+    body.innerHTML = '<tr><td colspan="4" style="text-align:center;"><i class="fa-solid fa-spinner fa-spin"></i> Cargando...</td></tr>';
 
-    const emailCoach = AuthState.user.email;
-    const profeData = await AuthState.db.getUsuarioData(emailCoach);
+    // GAP 3 + GAP 5 FIX: leer de icpc_participantes con concurso_id
+    const alumnos = await AuthState.db.getParticipantesByCoachYConcurso(
+        AuthState.user.email,
+        window.currentAdminConcursoId
+    );
 
-    if (!profeData || !profeData.equipos_inscritos || profeData.equipos_inscritos.length === 0) {
-        body.innerHTML = '<tr><td colspan="3" style="text-align:center; padding:2rem; opacity:0.5;">No has inscrito ningún equipo.</td></tr>';
-    } else {
-        body.innerHTML = profeData.equipos_inscritos.map(a => `
-            <tr>
-                <td>
-                    <div style="font-weight:700; color:white;">${a.nombre || 'SIN NOMBRE'}</div>
-                    <div style="font-size:0.8rem; color:var(--tecnm-text-muted);">${a.email}</div>
-                </td>
-                <td><span style="color:var(--tecnm-gold); font-weight:600;">${a.equipo}</span></td>
-                <td><button class="btn-tbl btn-tbl--danger" onclick="window._removerAlumnoCoach('${a.email}')"><i class="fa-solid fa-user-minus"></i></button></td>
-            </tr>
-        `).join('');
+    if (!alumnos.length) {
+        body.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:2rem; opacity:0.5;">No has inscrito ningún equipo aún.</td></tr>';
+        return;
     }
+
+    body.innerHTML = alumnos.map(a => `
+        <tr>
+            <td>
+                <div style="font-weight:700; color:white;">${a.nombre || 'SIN NOMBRE'}</div>
+                <div style="font-size:0.8rem; color:var(--tecnm-text-muted);">${a.email}</div>
+            </td>
+            <td><span style="color:var(--tecnm-gold); font-weight:600;">${a.equipo}</span></td>
+            <td><span style="color:${a.checkin ? 'var(--status-ac)' : 'rgba(255,255,255,0.3)'}; font-size:0.8rem;">
+                ${a.checkin ? '<i class="fa-solid fa-circle-check"></i> Conectado' : '<i class="fa-regular fa-circle"></i> Pendiente'}
+            </span></td>
+            <td><button class="btn-tbl btn-tbl--danger" onclick="window._removerAlumnoCoach('${a.email}')"><i class="fa-solid fa-user-minus"></i></button></td>
+        </tr>
+    `).join('');
 }
+
 
 let sbInterval = null;
 

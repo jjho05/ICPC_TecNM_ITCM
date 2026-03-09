@@ -107,20 +107,124 @@ export const AuthState = {
             return true;
         },
 
-        // --- Problemas Locales (Se pueden pasar a Supabase después) ---
-        // Por compatibilidad de la Fase 4, dejaremos problemas en LocalStorage por ahora
-        getProblemas() {
-            return JSON.parse(localStorage.getItem('icpc_problemas') || '[]');
+        // ─── Problemas (ahora en Supabase — tabla icpc_problemas) ───────────
+        async getProblemas() {
+            const { data, error } = await supabase.from('icpc_problemas').select('*').order('dificultad', { ascending: true });
+            if (error) { console.error('getProblemas:', error); return []; }
+            return data || [];
         },
-        saveProblema(problema) {
-            const lista = this.getProblemas();
-            const idx = lista.findIndex(p => p.id === problema.id);
-            if (idx >= 0) lista[idx] = problema; else lista.push(problema);
-            localStorage.setItem('icpc_problemas', JSON.stringify(lista));
+        async getProblemaById(id) {
+            const { data, error } = await supabase.from('icpc_problemas').select('*').eq('id', id).single();
+            if (error) return null;
+            return data;
         },
-        getProblemaById(id) {
-            return this.getProblemas().find(p => p.id === id) || null;
+        async saveProblema(problema) {
+            const { error } = await supabase.from('icpc_problemas').upsert({
+                id: problema.id,
+                titulo: problema.titulo,
+                descripcion: problema.descripcion || '',
+                dificultad: problema.dificultad || 1000,
+                tags: problema.tags || [],
+                fuente: problema.fuente || 'admin',
+                tiempo_limite: problema.tiempo_limite || 2000,
+                memoria_limite: problema.memoria_limite || 256,
+                casos_prueba: problema.casos_prueba || [],
+                publicado: problema.publicado || false,
+                creado_por: problema.creado_por || null
+            });
+            if (error) { console.error('saveProblema:', error); throw error; }
+            return true;
         },
+        async saveProblemasLote(lista) {
+            // Batch upsert para seed inicial
+            const rows = lista.map(p => ({
+                id: p.id || crypto.randomUUID(),
+                titulo: p.titulo,
+                descripcion: p.descripcion || '',
+                dificultad: p.dificultad || 1000,
+                tags: p.tags || [],
+                fuente: p.fuente || 'local',
+                tiempo_limite: p.tiempo_limite || 2000,
+                memoria_limite: p.memoria_limite || 256,
+                casos_prueba: p.casos_prueba || p.ejemplos || [],
+                publicado: true,
+                creado_por: 'seed'
+            }));
+            const { error } = await supabase.from('icpc_problemas').upsert(rows, { onConflict: 'id', ignoreDuplicates: true });
+            if (error) console.error('saveProblemasLote:', error);
+        },
+        async deleteProblema(id) {
+            const { error } = await supabase.from('icpc_problemas').delete().eq('id', id);
+            if (error) throw error;
+        },
+
+        // ─── Participantes Normalizados (icpc_participantes) ────────────────
+        async getParticipantesByCoachYConcurso(emailCoach, concursoId) {
+            const { data, error } = await supabase
+                .from('icpc_participantes')
+                .select('*')
+                .eq('coach_email', emailCoach)
+                .eq('concurso_id', concursoId);
+            if (error) { console.error('getParticipantes:', error); return []; }
+            return data || [];
+        },
+
+        async getParticipantesByCoach(emailCoach) {
+            // Mantener compatibilidad: devuelve todos los alumnos de este coach
+            const { data, error } = await supabase
+                .from('icpc_participantes')
+                .select('*')
+                .eq('coach_email', emailCoach);
+            if (error) { console.error('getParticipantesByCoach:', error); return []; }
+            return data || [];
+        },
+
+        async saveParticipante(emailCoach, alumno, concursoId) {
+            const emailNormal = alumno.email.toLowerCase().trim();
+            const nombreNormal = alumno.nombre.toUpperCase().trim();
+            const equipoNormal = alumno.equipo.trim();
+
+            const { error } = await supabase.from('icpc_participantes').upsert({
+                email: emailNormal,
+                nombre: nombreNormal,
+                equipo: equipoNormal,
+                concurso_id: concursoId,
+                coach_email: emailCoach,
+                checkin: alumno.checkin || false
+            }, { onConflict: 'email,concurso_id' });
+
+            if (error) { console.error('saveParticipante:', error); throw error; }
+            return true;
+        },
+
+        async deleteParticipante(emailAlumno, concursoId) {
+            const { error } = await supabase
+                .from('icpc_participantes')
+                .delete()
+                .eq('email', emailAlumno.toLowerCase())
+                .eq('concurso_id', concursoId);
+            if (error) throw error;
+            return true;
+        },
+
+        async isAlumnoPermitido(email, concursoId = null) {
+            const emailLower = email.toLowerCase().trim();
+            let query = supabase.from('icpc_participantes').select('email, concurso_id').eq('email', emailLower);
+            if (concursoId) query = query.eq('concurso_id', concursoId);
+            const { data, error } = await query.limit(1);
+            if (error) return { permitido: false, concursoId: null, equipo: null };
+            if (!data || data.length === 0) return { permitido: false, concursoId: null, equipo: null };
+            return { permitido: true, concursoId: data[0].concurso_id, equipo: data[0].equipo, nombre: data[0].nombre };
+        },
+
+        async setCheckin(email, concursoId) {
+            const { error } = await supabase.from('icpc_participantes')
+                .update({ checkin: true })
+                .eq('email', email.toLowerCase())
+                .eq('concurso_id', concursoId);
+            if (error) console.error('setCheckin:', error);
+        },
+
 
         // --- Usuarios (Profesores/Coaches/Jueces) ---
         async validateUsuario(email, password) {
