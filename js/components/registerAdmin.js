@@ -12,16 +12,8 @@ export const RegisterAdminView = () => {
             const email = document.getElementById('reg-admin-email').value.trim();
             const pass = document.getElementById('reg-admin-pass').value;
             const passConfirm = document.getElementById('reg-admin-pass-confirm').value;
-            const inviteCode = document.getElementById('reg-admin-code').value.trim();
             const err = document.getElementById('reg-admin-err');
             const btn = form.querySelector('button[type="submit"]');
-
-            // Código de invitación básico para evitar registros aleatorios (configurable)
-            if (inviteCode !== 'ITCM-ADMIN-2024') {
-                err.style.display = 'block';
-                err.textContent = 'Código de invitación de administrador inválido.';
-                return;
-            }
 
             if (pass !== passConfirm) {
                 err.style.display = 'block';
@@ -82,10 +74,6 @@ export const RegisterAdminView = () => {
                 <div class="form-group">
                     <label class="form-label">Correo Institucional / Admin</label>
                     <input type="email" id="reg-admin-email" class="form-input" required placeholder="admin@icpc.itcm.mx">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Código de Invitación SysAdmin</label>
-                    <input type="text" id="reg-admin-code" class="form-input" required placeholder="Solicitar a Soporte">
                 </div>
                 <div class="grid-2">
                     <div class="form-group">
