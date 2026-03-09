@@ -52,6 +52,9 @@ export const AdminPanelView = () => {
                 <button class="admin-nav-btn" data-tab="tab-analiticas">
                     <i class="fa-solid fa-chart-line"></i> Analíticas
                 </button>
+                <button class="admin-nav-btn" data-tab="tab-auditoria">
+                    <i class="fa-solid fa-shield-halved"></i> Auditoría
+                </button>
             </nav>
             <button class="admin-logout-btn" id="admin-logout">
                 <i class="fa-solid fa-right-from-bracket"></i> Cerrar Sesión
@@ -305,6 +308,30 @@ export const AdminPanelView = () => {
                         <tbody id="tabla-concursos-body"></tbody>
                     </table>
                 </div>
+            <!-- TAB: Auditoría (V4) -->
+            <section id="tab-auditoria" class="admin-tab" style="display:none;">
+                <div class="admin-tab-header">
+                    <div>
+                        <h2 class="admin-tab-title">Logs de Auditoría</h2>
+                        <p class="admin-tab-sub">Monitorea las acciones críticas realizadas en la plataforma.</p>
+                    </div>
+                    <button class="btn-admin btn-admin--ghost" id="btn-refresh-audit">
+                        <i class="fa-solid fa-arrows-rotate"></i> Actualizar
+                    </button>
+                </div>
+                <div class="admin-table-wrap">
+                    <table class="admin-table">
+                        <thead>
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Usuario</th>
+                                <th>Acción</th>
+                                <th>Detalle</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabla-auditoria-body"></tbody>
+                    </table>
+                </div>
             </section>
 
         </main>
@@ -355,6 +382,7 @@ function bindAdminEvents() {
     });
     document.getElementById('btn-save-profesor').addEventListener('click', saveProfesor);
     document.getElementById('btn-nueva-sede').addEventListener('click', nuevaSede);
+    document.getElementById('btn-refresh-audit').addEventListener('click', renderAuditoria);
 
     renderBanco();
     renderProfesores();
@@ -371,6 +399,7 @@ function renderTab(tabId) {
     if (tabId === 'tab-concursos') renderConcursos();
     if (tabId === 'tab-sedes') renderSedes();
     if (tabId === 'tab-analiticas') renderAnaliticas();
+    if (tabId === 'tab-auditoria') renderAuditoria();
 }
 
 async function renderBanco() {
@@ -912,6 +941,38 @@ async function autoTraducirTexto(texto, de = 'en', a = 'es') {
         return texto; // Fall back al original si falla
     } catch {
         return texto;
+    }
+}
+
+async function renderAuditoria() {
+    const body = document.getElementById('tabla-auditoria-body');
+    if (!body) return;
+
+    body.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:1.5rem;opacity:.4;"><i class="fa-solid fa-spinner fa-spin"></i> Cargando logs...</td></tr>';
+
+    try {
+        const { data, error } = await supabase
+            .from('icpc_logs_auditoria')
+            .select('*')
+            .order('created_at', { ascending: false })
+            .limit(100);
+
+        if (error) throw error;
+
+        body.innerHTML = data.length
+            ? data.map(log => `
+                <tr>
+                    <td><small>${new Date(log.created_at).toLocaleString()}</small></td>
+                    <td><strong>${log.usuario_email}</strong></td>
+                    <td><span class="status-pill--done" style="font-size:0.7rem;">${log.accion}</span></td>
+                    <td><small style="opacity:0.7;">${log.detalles}</small></td>
+                </tr>
+            `).join('')
+            : '<tr><td colspan="4" style="text-align:center;padding:2rem;opacity:.4;">No hay registros de auditoría aún.</td></tr>';
+
+    } catch (e) {
+        console.error(e);
+        body.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--status-re);">Error al cargar auditoría. Verifica que la tabla exista.</td></tr>';
     }
 }
 
