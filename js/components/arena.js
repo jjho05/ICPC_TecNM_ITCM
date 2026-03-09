@@ -244,7 +244,8 @@ export const ArenaView = () => {
 
 async function initArena() {
     const all = await AuthState.db.getConcursos();
-    const concurso = all.find(c => c.estado === 'activo');
+    // Aceptar activo o programado
+    const concurso = all.find(c => c.estado === 'activo' || c.estado === 'programado');
 
     if (!concurso) {
         document.getElementById('arena-prob-content').innerHTML = `
@@ -261,6 +262,13 @@ async function initArena() {
 
     window.currentConcursoId = concurso.id;
 
+    // ── Pre-Concurso (Countdown) ──
+    if (concurso.estado === 'programado') {
+        renderCountdown(concurso);
+        return; // Salimos de initArena tempranamente, el layout principal se oculta
+    }
+
+    // ── Si está activo, inicialización normal ──
     // Nombre del equipo
     document.getElementById('arena-team-name').textContent =
         AuthState.user.team || AuthState.user.email;
@@ -309,7 +317,13 @@ async function initArena() {
             document.querySelectorAll('.arena-tab-content').forEach(c => c.style.display = 'none');
             const target = document.getElementById(btn.dataset.apanel);
             if (target) target.style.display = 'block';
+
             if (btn.dataset.apanel === 'ap-ranking') renderArenaScoreboardById(concurso.id);
+
+            if (btn.dataset.apanel === 'ap-historial') {
+                cargarHistorialEnvios(concurso.id);
+            }
+
             if (btn.dataset.apanel === 'ap-clarif') {
                 // Quitar badge de notificación al abrir
                 const badge = document.getElementById('arena-clarif-badge');
@@ -318,6 +332,11 @@ async function initArena() {
             }
         });
     });
+
+    // ── Botón refrescar historial manual ──
+    const btnRefHist = document.getElementById('btn-refresh-historial');
+    if (btnRefHist) btnRefHist.addEventListener('click', () => cargarHistorialEnvios(concurso.id));
+
 
     // ── Evento: enviar clarificación ──────────────────────────────────
     document.getElementById('btn-enviar-clarif').addEventListener('click', () => enviarClarificacion(concurso.id));
@@ -569,72 +588,134 @@ function seleccionarProblema(prob) {
     document.getElementById('arena-verd-badge').innerHTML = '';
 }
 
-function probarCodigo(esEnvio) {
+async function probarCodigo(esEnvio) {
     if (!problemaActivo) {
         UIModal.alert('Selecciona un problema', 'Debes elegir un problema antes de enviar.');
         return;
     }
-    const code = document.getElementById('arena-code').value;
+    const code = document.getElementById('arena-code').value?.trim();
     const lang = document.getElementById('arena-lang').value;
+
+    if (!code || code.length < 5) {
+        UIModal.alert('Código vacío', 'Escribe tu solución antes de enviar.'); return;
+    }
 
     const outputPanel = document.getElementById('arena-output-panel');
     const outputPre = document.getElementById('arena-output-pre');
     const verdBadge = document.getElementById('arena-verd-badge');
     const outputTitle = document.getElementById('arena-output-title');
+    const btnEnviar = document.getElementById('btn-arena-enviar');
+    const btnProbar = document.getElementById('btn-arena-probar');
 
     outputPanel.className = 'arena-output-panel loading';
-    outputPre.textContent = '\u23F3 Evaluando...';
+    outputPre.textContent = esEnvio
+        ? '⏳ Ejecutando código REAL en servidor... (puede tardar 3–8 segundos)'
+        : '⏳ Ejecutando en servidor...';
     verdBadge.innerHTML = '';
+    if (btnEnviar) btnEnviar.disabled = true;
+    if (btnProbar) btnProbar.disabled = true;
 
-    setTimeout(async () => {
+    const casos = problemaActivo.casos_prueba || problemaActivo.testcases || problemaActivo.ejemplos || [];
+    const primer = casos[0] || {};
+    const stdin = primer.entrada || primer.input || '';
+    const expected = (primer.salida_esperada || primer.output || primer.expected || '').trim();
+
+    let resultado;
+    try {
         if (esEnvio) {
-            const resultado = JudgeSim.evaluate(code, lang, problemaActivo);
-            const v = resultado.veredicto;
-            const vInfo = VEREDICTOS[v] || { nombre: v, color: '#888', icon: 'fa-circle' };
-
-            // Badge coloreado con nombre en español
-            verdBadge.innerHTML = `
-                <span class="verd-badge" style="background:${vInfo.color}20;color:${vInfo.color};border:1px solid ${vInfo.color}40;padding:.25rem .75rem;border-radius:20px;font-weight:700;font-size:.82rem;">
-                    <i class="fa-solid ${vInfo.icon}"></i>&nbsp;${v} — ${vInfo.nombre}
-                </span>`;
-
-            outputPanel.className = `arena-output-panel vp-${v.toLowerCase()}`;
-            outputTitle.textContent = `${esEnvio ? 'Envío' : 'Test'} — ${resultado.tiempo_ms}ms | ${Math.round((resultado.memoria_kb || 0) / 1024)}MB`;
-            outputPre.textContent = resultado.output
-                ? resultado.output
-                : resultado.mensaje || '(sin salida)';
-
-            // Guardar submission en Supabase con código fuente
-            if (AuthState.isAlumno() && window.currentConcursoId) {
-                await AuthState.db.addSubmission({
-                    alumno_email: AuthState.user.email,
-                    equipo: AuthState.user.team || AuthState.user.email,
-                    problema_id: problemaActivo.id,
-                    concurso_id: window.currentConcursoId,
-                    veredicto: v,
-                    tiempo_ms: resultado.tiempo_ms,
-                    memoria_kb: resultado.memoria_kb || 0,
-                    codigo_fuente: code,
-                    lenguaje: lang
-                });
+            resultado = await Judge0.evaluate(
+                code, lang, stdin, expected,
+                (problemaActivo.tiempo_limite || 2000) / 1000,
+                (problemaActivo.memoria_limite || 256) * 1024
+            );
+            if (resultado.veredicto === 'SE') {
+                outputPre.textContent = '⚠️ Judge0 no disponible, usando simulación...';
+                await new Promise(r => setTimeout(r, 600));
+                const sim = JudgeSim.evaluate(code, lang, problemaActivo);
+                resultado = { ...sim, output: sim.output || sim.mensaje };
             }
         } else {
-            // Modo Probar (sin submission)
-            const ejemplo = (problemaActivo.casos_prueba || problemaActivo.ejemplos || [{}])[0];
-            const resultado = JudgeSim.run(code, lang, ejemplo);
-            const v = resultado.ok ? 'AC' : 'WA';
-            const vInfo = VEREDICTOS[v];
-
-            verdBadge.innerHTML = `
-                <span class="verd-badge" style="background:${vInfo.color}20;color:${vInfo.color};border:1px solid ${vInfo.color}40;padding:.25rem .75rem;border-radius:20px;font-weight:700;font-size:.82rem;">
-                    <i class="fa-solid ${vInfo.icon}"></i>&nbsp;${v}
-                </span>`;
-            outputPanel.className = `arena-output-panel vp-${v.toLowerCase()}`;
-            outputTitle.textContent = 'Prueba Local';
-            outputPre.textContent = resultado.output || '(sin salida)';
+            resultado = await Judge0.run(code, lang, primer);
+            if (resultado.veredicto === 'SE') {
+                const sim = JudgeSim.run(code, lang, primer);
+                resultado = { ok: sim.ok, output: sim.output, veredicto: sim.ok ? 'AC' : 'WA' };
+            }
         }
-    }, 900);
+    } catch (e) {
+        resultado = { veredicto: 'SE', output: 'Error de red.', mensaje: e.message };
+    }
+
+    const v = esEnvio ? resultado.veredicto : (resultado.ok ? 'AC' : (resultado.veredicto || 'WA'));
+    const vInfo = VEREDICTOS[v] || { nombre: v, color: '#888', icon: 'fa-circle-question' };
+
+    verdBadge.innerHTML = `
+        <span style="background:${vInfo.color}20;color:${vInfo.color};border:1px solid ${vInfo.color}40;
+            padding:.28rem .8rem;border-radius:20px;font-weight:700;font-size:.82rem;display:inline-flex;align-items:center;gap:.4rem;">
+            <i class="fa-solid ${vInfo.icon}"></i>${v} &mdash; ${vInfo.nombre}
+        </span>`;
+
+    outputPanel.className = `arena-output-panel vp-${v.toLowerCase()}`;
+    const timeTxt = resultado.tiempo_ms ? `${resultado.tiempo_ms}ms` : '';
+    const memTxt = resultado.memoria_kb ? `${Math.round(resultado.memoria_kb / 1024)}MB` : '';
+    outputTitle.textContent = [esEnvio ? 'Envío' : 'Prueba', timeTxt, memTxt].filter(Boolean).join(' | ');
+
+    const errExtra = resultado.error && resultado.error !== resultado.output ? `\n-- Stderr --\n${resultado.error}` : '';
+    outputPre.textContent = (resultado.output + errExtra).trim() || resultado.mensaje || '(sin salida)';
+
+    if (esEnvio && AuthState.isAlumno() && window.currentConcursoId) {
+        await AuthState.db.addSubmission({
+            alumno_email: AuthState.user.email,
+            equipo: AuthState.user.team || AuthState.user.email,
+            problema_id: problemaActivo.id,
+            concurso_id: window.currentConcursoId,
+            veredicto: v,
+            tiempo_ms: resultado.tiempo_ms || 0,
+            memoria_kb: resultado.memoria_kb || 0,
+            codigo_fuente: code,
+            lenguaje: lang
+        });
+        const histTab = document.getElementById('ap-historial');
+        if (histTab && histTab.style.display !== 'none') cargarHistorialEnvios(window.currentConcursoId);
+    }
+
+    if (btnEnviar) btnEnviar.disabled = false;
+    if (btnProbar) btnProbar.disabled = false;
 }
+
+// ── Historial de Envíos del equipo ─────────────────────────────────────────
+
+async function cargarHistorialEnvios(concursoId) {
+    const el = document.getElementById('arena-historial-list');
+    if (!el) return;
+
+    const equipo = AuthState.user.team || AuthState.user.email;
+    const { data } = await supabase
+        .from('icpc_submissions')
+        .select('*')
+        .eq('concurso_id', concursoId)
+        .eq('equipo', equipo)
+        .order('timestamp', { ascending: false })
+        .limit(50);
+
+    if (!data?.length) {
+        el.innerHTML = '<p style="opacity:.4;font-size:.85rem;text-align:center;padding:1rem;">¡Aún no has enviado nada!</p>';
+        return;
+    }
+
+    const VMAP = { AC: '#22c55e', WA: '#ef4444', TLE: '#f59e0b', MLE: '#8b5cf6', RE: '#f97316', CE: '#6b7280', PE: '#06b6d4', SE: '#dc2626' };
+    el.innerHTML = data.map(s => {
+        const color = VMAP[s.veredicto] || '#888';
+        const ts = new Date(s.timestamp || s.ts_servidor || 0).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        return `<div style="display:grid;grid-template-columns:3.5rem 1fr auto auto;gap:.5rem;align-items:center;
+            padding:.45rem .7rem;border-radius:6px;margin-bottom:.3rem;background:rgba(255,255,255,0.03);border-left:3px solid ${color};">
+            <span style="font-weight:800;color:${color};font-size:.8rem;">${s.veredicto}</span>
+            <span style="color:rgba(255,255,255,.7);font-size:.78rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${s.problema_id || ''}</span>
+            <span style="color:rgba(255,255,255,.35);font-size:.72rem;">${s.tiempo_ms ? s.tiempo_ms + 'ms' : ''}</span>
+            <span style="color:rgba(255,255,255,.3);font-size:.7rem;">${ts}</span>
+        </div>`;
+    }).join('');
+}
+
 
 
 
@@ -771,4 +852,84 @@ function renderArenaScoreboard(concurso) {
                 <td class="sb-total">${data.total}</td>
             </tr>`).join('')}
         </tbody></table>`;
+}
+
+// ── Sala de Espera Pre-Concurso (Countdown) ──
+let preTimerInterval = null;
+
+function renderCountdown(concurso) {
+    const root = document.getElementById('arena-root');
+    if (!root) return;
+
+    root.innerHTML = `
+        <div style="min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; 
+                    background:linear-gradient(to bottom, var(--tecnm-blue), #0f172a); color:white; padding:2rem; text-align:center;">
+            
+            <div style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); 
+                        padding:3rem 4rem; border-radius:16px; box-shadow:0 25px 50px -12px rgba(0,0,0,0.5); 
+                        backdrop-filter:blur(10px); max-width:600px;">
+                
+                <i class="fa-solid fa-rocket fa-3x" style="color:var(--tecnm-gold); margin-bottom:1.5rem; animation:pulse 2s infinite;"></i>
+                
+                <h1 style="font-size:2rem; margin-bottom:0.5rem; font-weight:800;">${concurso.nombre}</h1>
+                <p style="color:rgba(255,255,255,0.7); font-size:1.1rem; margin-bottom:2rem;">El concurso está programado, pero aún no inicia.</p>
+                
+                <div style="display:flex; justify-content:center; gap:1.5rem; margin-bottom:2.5rem;">
+                    <div class="cd-box"><span id="cd-h">00</span><small>Horas</small></div>
+                    <div class="cd-box"><span id="cd-m">00</span><small>Minutos</small></div>
+                    <div class="cd-box"><span id="cd-s">00</span><small>Segundos</small></div>
+                </div>
+
+                <div style="text-align:center;">
+                    <button id="btn-cd-volver" class="arena-btn arena-btn--ghost" style="font-size:1rem; padding:0.6rem 2rem;">
+                        <i class="fa-solid fa-arrow-left"></i> Volver al Inicio
+                    </button>
+                    <p style="margin-top:1rem; font-size:0.8rem; color:rgba(255,255,255,0.4);">
+                        La página se recargará automáticamente cuando inicie.
+                    </p>
+                </div>
+            </div>
+            <style>
+                .cd-box { background:rgba(0,0,0,0.3); padding:1rem 1.5rem; border-radius:12px; border:1px solid rgba(255,255,255,0.05); min-width:80px; }
+                .cd-box span { display:block; font-size:2.5rem; font-weight:800; font-family:'Courier New', monospace; color:white; line-height:1; }
+                .cd-box small { display:block; font-size:0.75rem; text-transform:uppercase; letter-spacing:1px; color:var(--tecnm-gold); margin-top:0.5rem; font-weight:600; }
+                @keyframes pulse { 0%, 100% { transform:scale(1); opacity:1; } 50% { transform:scale(1.1) translateY(-5px); opacity:0.8; } }
+            </style>
+        </div>
+    `;
+
+    document.getElementById('btn-cd-volver')?.addEventListener('click', () => {
+        if (preTimerInterval) clearInterval(preTimerInterval);
+        window.router.navigate('/');
+    });
+
+    const inicio = new Date(concurso.ts_inicio).getTime();
+
+    // Iniciar timer
+    if (preTimerInterval) clearInterval(preTimerInterval);
+    actualizarCountdownTimer(inicio);
+    preTimerInterval = setInterval(() => actualizarCountdownTimer(inicio), 1000);
+}
+
+function actualizarCountdownTimer(inicioMs) {
+    const diff = inicioMs - Date.now();
+
+    // Si el tiempo llegó a 0, recargar para entrar a la arena
+    if (diff <= 0) {
+        if (preTimerInterval) clearInterval(preTimerInterval);
+        window.location.reload();
+        return;
+    }
+
+    const h = Math.floor(diff / 3600000);
+    const m = Math.floor((diff % 3600000) / 60000);
+    const s = Math.floor((diff % 60000) / 1000);
+
+    const elH = document.getElementById('cd-h');
+    const elM = document.getElementById('cd-m');
+    const elS = document.getElementById('cd-s');
+
+    if (elH) elH.textContent = String(h).padStart(2, '0');
+    if (elM) elM.textContent = String(m).padStart(2, '0');
+    if (elS) elS.textContent = String(s).padStart(2, '0');
 }
