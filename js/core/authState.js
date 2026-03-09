@@ -125,10 +125,31 @@ export const AuthState = {
         },
 
         // ─── Problemas (ahora en Supabase — tabla icpc_problemas) ───────────
-        async getProblemas() {
-            const { data, error } = await supabase.from('icpc_problemas').select('*').order('dificultad', { ascending: true });
-            if (error) { console.error('getProblemas:', error); return []; }
-            return data || [];
+        async getProblemas(page = 1, pageSize = 20, filters = {}) {
+            let query = supabase.from('icpc_problemas').select('*', { count: 'exact' });
+
+            if (filters.search) {
+                query = query.or(`titulo.ilike.%${filters.search}%,tags.cs.{${filters.search}}`);
+            }
+            if (filters.dificultad) {
+                query = query.eq('dificultad', filters.dificultad);
+            }
+            if (filters.fuente) {
+                query = query.eq('fuente', filters.fuente);
+            }
+            if (filters.publicado !== undefined) {
+                query = query.eq('publicado', filters.publicado);
+            }
+
+            const start = (page - 1) * pageSize;
+            const end = start + pageSize - 1;
+
+            const { data, error, count } = await query
+                .order('dificultad', { ascending: true })
+                .range(start, end);
+
+            if (error) { console.error('getProblemas:', error); return { data: [], count: 0 }; }
+            return { data: data || [], count: count || 0 };
         },
         async getProblemaById(id) {
             const { data, error } = await supabase.from('icpc_problemas').select('*').eq('id', id).single();

@@ -209,7 +209,7 @@ async function probarPractica(esEvaluar) {
     const code = document.getElementById('practica-code').value;
     const lang = document.getElementById('practica-lang').value;
 
-    if (!code.trim()) { UIModal.alert('Código Vacío', 'Por favor escribe algo de código antes de enviar.'); return; }
+    if (!code.trim()) { UIToast.warn('Por favor escribe algo de código antes de enviar.'); return; }
 
     const outputPanel = document.getElementById('practica-output-panel');
     const outputPre = document.getElementById('practica-output-pre');

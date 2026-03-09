@@ -805,7 +805,7 @@ async function renderAdminJuezDetalles() {
         const noAsignados = banco.filter(p => !(c.problemas || []).includes(p.id));
 
         if (noAsignados.length === 0) {
-            UIModal.alert('Banco Vacío', 'No hay más problemas disponibles en el Banco de Problemas.');
+            UIToast.info('No hay más problemas disponibles en el Banco de Problemas.');
             return;
         }
 
@@ -824,11 +824,11 @@ async function renderAdminJuezDetalles() {
                     c.problemas.push(pExacto.id);
                     await AuthState.db.saveConcurso(c);
                     renderAdminJuezDetalles();
-                } else {
-                    UIModal.alert('Ya añadido', 'Ese problema ya está en el concurso.');
+                    UIToast.warn('Ese problema ya está en el concurso.');
+                    return;
                 }
             } else {
-                UIModal.alert('Error', `ID "${probIdStr}" no encontrado en el banco.`);
+                UIToast.error(`ID "${probIdStr}" no encontrado en el banco.`);
             }
         }
     };
@@ -875,7 +875,7 @@ if (typeof window !== 'undefined') {
         const nombreEq = document.getElementById('coach-nuevo-alumno-equipo').value.trim();
 
         if (!nombreAlu || !emailAlu || !nombreEq) {
-            UIModal.alert('Datos incompletos', 'Por favor llena el nombre completo, correo y equipo.');
+            UIToast.warn('Por favor llena el nombre completo, correo y equipo.');
             return;
         }
 
@@ -887,7 +887,7 @@ if (typeof window !== 'undefined') {
         const miembrosEquipo = (todosParticipantes || []).filter(p => p.equipo.toLowerCase().trim() === nombreEq.toLowerCase().trim());
 
         if (miembrosEquipo.length >= maxMembers) {
-            UIModal.alert('Equipo Lleno', `El equipo "${nombreEq}" ya tiene el máximo permitido de ${maxMembers} integrantes para este concurso.`);
+            UIToast.error(`El equipo "${nombreEq}" ya tiene el máximo permitido de ${maxMembers} alumnos.`);
             return;
         }
 
@@ -911,9 +911,9 @@ if (typeof window !== 'undefined') {
         } catch (error) {
             console.error(error);
             if (error.message?.includes('unique')) {
-                UIModal.alert('Ya registrado', 'Este correo ya está inscrito en este concurso.');
+                UIToast.warn('Este correo ya está inscrito en este concurso.');
             } else {
-                UIModal.alert('Error', 'No se pudo registrar al alumno. Verifica la conexión.');
+                UIToast.error('No se pudo registrar al alumno.');
             }
         } finally {
             if (btn) {

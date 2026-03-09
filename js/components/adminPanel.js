@@ -217,8 +217,14 @@ export const AdminPanelView = () => {
                             </div>
                         </div>
                         <div class="admin-field-group">
-                            <label class="admin-label">Descripción del Problema * (puedes usar HTML)</label>
-                            <textarea id="edit-desc" class="admin-textarea" rows="10" placeholder="Escribe el enunciado aquí..."></textarea>
+                            <label class="admin-label">Descripción del Problema * (Markdown habilitado)</label>
+                            <div class="editor-md-container">
+                                <textarea id="edit-desc" class="admin-textarea" rows="12" placeholder="Escribe el enunciado aquí..."></textarea>
+                                <div id="edit-preview" class="admin-preview-pane markdown-body">
+                                    <p style="opacity:0.3; padding:1rem; text-align:center;">Previsualización en tiempo real...</p>
+                                </div>
+                            </div>
+                            <p class="admin-help-text">Soporte para LaTeX: Usa $$ para fórmulas (ej: $$x^2$$).</p>
                         </div>
                     </div>
 
@@ -371,22 +377,21 @@ async function renderBanco() {
     const body = document.getElementById('tabla-problemas-body');
     if (body) body.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:2rem;opacity:.4;"><i class="fa-solid fa-spinner fa-spin"></i> Cargando...</td></tr>';
 
-    const search = document.getElementById('filter-search')?.value?.toLowerCase() || '';
+    const search = document.getElementById('filter-search')?.value || '';
     const diff = document.getElementById('filter-dificultad')?.value || '';
     const fuente = document.getElementById('filter-fuente')?.value || '';
 
-    const todos = await AuthState.db.getProblemas();
-    bancoFiltrado = todos.filter(p => {
-        const matchSearch = !search || p.titulo.toLowerCase().includes(search) || (p.tags || []).join(' ').includes(search);
-        const matchDiff = !diff || p.dificultad == diff;
-        const matchFuente = !fuente || p.fuente === fuente;
-        return matchSearch && matchDiff && matchFuente;
+    const { data: pagina, count } = await AuthState.db.getProblemas(bancoPagina, BANCO_POR_PAGINA, {
+        search,
+        dificultad: diff,
+        fuente: fuente
     });
 
-    document.getElementById('banco-count').textContent = `${bancoFiltrado.length} de ${todos.length} problemas`;
+    if (document.getElementById('banco-count')) {
+        document.getElementById('banco-count').textContent = `${pagina.length} mostrados (Total: ${count})`;
+    }
 
     const inicio = (bancoPagina - 1) * BANCO_POR_PAGINA;
-    const pagina = bancoFiltrado.slice(inicio, inicio + BANCO_POR_PAGINA);
 
     if (!body) return;
     body.innerHTML = pagina.map((p, i) => `
@@ -403,7 +408,7 @@ async function renderBanco() {
         </tr>
     `).join('') || '<tr><td colspan="6" style="text-align:center;padding:2rem;opacity:.4;">No hay problemas con ese filtro.</td></tr>';
 
-    renderPaginacion(bancoFiltrado.length);
+    renderPaginacion(count);
 
     window._adminEditProblema = async (id) => {
         const prob = await AuthState.db.getProblemaById(id);
@@ -414,7 +419,8 @@ async function renderBanco() {
             try {
                 await AuthState.db.deleteProblema(id);
                 renderBanco();
-            } catch (e) { UIModal.alert('Error', 'No se pudo eliminar el problema.'); }
+                UIToast.success('Problema eliminado correctamente.');
+            } catch (e) { UIToast.error('No se pudo eliminar el problema.'); }
         }
     };
 }
@@ -577,11 +583,42 @@ function abrirEditor(problema) {
     document.querySelector('[data-tab="tab-editor"]').classList.add('active');
 
     document.getElementById('editor-titulo-tab').textContent = problema ? 'Editar Problema' : 'Nuevo Problema';
+
+    // Zen Mode Logic
+    const zenBtn = document.getElementById('btn-zen-mode');
+    if (zenBtn) {
+        zenBtn.onclick = () => {
+            const editorMain = document.querySelector('.admin-main');
+            editorMain.classList.toggle('zen-active');
+            zenBtn.innerHTML = editorMain.classList.contains('zen-active')
+                ? '<i class="fa-solid fa-compress"></i> Salir Zen'
+                : '<i class="fa-solid fa-expand"></i> Zen Mode';
+        };
+    }
+
     document.getElementById('edit-id').value = problema?.id || '';
     document.getElementById('edit-titulo').value = problema?.titulo || '';
     document.getElementById('edit-dificultad').value = problema?.dificultad || 1000;
     document.getElementById('edit-tags').value = (problema?.tags || []).join(', ');
-    document.getElementById('edit-desc').value = problema?.desc || '';
+    document.getElementById('edit-desc').value = problema?.descripcion || problema?.desc || '';
+
+    const preview = document.getElementById('edit-preview');
+    const updatePreview = () => {
+        const text = document.getElementById('edit-desc').value;
+        const html = marked.parse(text);
+        preview.innerHTML = html;
+        if (typeof renderMathInElement === 'function') {
+            renderMathInElement(preview, {
+                delimiters: [
+                    { left: '$$', right: '$$', display: true },
+                    { left: '$', right: '$', display: false }
+                ],
+                throwOnError: false
+            });
+        }
+    };
+    document.getElementById('edit-desc').oninput = updatePreview;
+    updatePreview();
 
     const container = document.getElementById('testcases-container');
     container.innerHTML = '';
@@ -651,9 +688,10 @@ async function guardarProblema(publicar) {
             publicado: publicar,
             creado_por: AuthState.user.email || 'admin'
         });
+        UIToast.success(publicar ? 'Problema publicado!' : 'Borrador guardado.');
         renderTab('tab-banco');
     } catch (e) {
-        UIModal.alert('Error', 'No se pudo guardar el problema. Verifica la conexión con Supabase.');
+        UIToast.error('No se pudo guardar el problema.');
     }
 }
 
@@ -726,7 +764,7 @@ async function renderConcursos() {
 
     window._exportarConcurso = async (id) => {
         const { data: subs } = await supabase.from('icpc_submissions').select('*').eq('concurso_id', id);
-        if (!subs?.length) { UIModal.alert('Sin datos', 'No hay submissions para este concurso.'); return; }
+        if (!subs?.length) { UIToast.info('No hay submissions para este concurso.'); return; }
         const csv = 'Equipo,Problema,Veredicto,Tiempo(ms),Timestamp\n' +
             subs.map(s => `${s.equipo},${s.problema_id},${s.veredicto},${s.tiempo_ms || 0},${s.ts_servidor || s.timestamp}`).join('\n');
         const blob = new Blob([csv], { type: 'text/csv' });
