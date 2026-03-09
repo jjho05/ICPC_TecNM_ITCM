@@ -7,6 +7,8 @@ import { AdminPanelView } from '../components/adminPanel.js';
 import { CheckinAlumnoView } from '../components/checkinAlumno.js';
 import { ArenaView } from '../components/arena.js';
 import { PracticaView } from '../components/practica.js';
+import { StaffDashboardView } from '../components/staffDashboard.js';
+import { ProfileView } from '../components/profile.js';
 import { AuthState } from './authState.js';
 
 // ── Definición de rutas ───────────────────────────────
@@ -20,11 +22,15 @@ const routes = {
     '/checkin-alumno': CheckinAlumnoView,
     '/arena': guardAlumno(ArenaView),
     '/practica': PracticaView,
+    '/staff': guardStaff(StaffDashboardView),
+    '/perfil': guardAuth(ProfileView),
 };
 
 function guardProfesor(view) { return () => AuthState.isProfesor() ? view() : redirect('/login-profesor'); }
 function guardAdmin(view) { return () => AuthState.isAdmin() ? view() : redirect('/login-admin'); }
 function guardAlumno(view) { return () => AuthState.isAlumno() ? view() : redirect('/checkin-alumno'); }
+function guardStaff(view) { return () => (AuthState.isProfesor() || AuthState.isAdmin()) ? view() : redirect('/'); }
+function guardAuth(view) { return () => AuthState.user ? view() : redirect('/'); }
 function redirect(to) { setTimeout(() => window.router.navigate(to), 0); return '<div></div>'; }
 
 // ── Router ────────────────────────────────────────────

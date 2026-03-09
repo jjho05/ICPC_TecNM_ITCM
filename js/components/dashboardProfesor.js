@@ -56,28 +56,37 @@ export const DashboardProfesorView = () => {
                         <div class="field-group-premium">
                             <label class="coach-label-premium">Nombre del Concurso</label>
                             <input type="text" id="ce-titulo" class="coach-input-premium" placeholder="Ej: Gran Premio de México 2026">
-                            <div class="field-hint-premium">Usa un nombre descriptivo para identificar el evento.</div>
+                        </div>
+
+                        <div class="field-group-premium">
+                            <label class="coach-label-premium">Categoría / Nivel</label>
+                            <select id="ce-categoria" class="coach-input-premium">
+                                <option value="division2">División 2 (Intermedio)</option>
+                                <option value="novatos">Novatos</option>
+                                <option value="division1">División 1 (Avanzado)</option>
+                                <option value="individual">Individual</option>
+                            </select>
+                        </div>
+
+                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:1rem;">
+                            <div class="field-group-premium">
+                                <label class="coach-label-premium">Min. Miembros</label>
+                                <input type="number" id="ce-min-integrantes" class="coach-input-premium" value="1" min="1" max="3">
+                            </div>
+                            <div class="field-group-premium">
+                                <label class="coach-label-premium">Max. Miembros</label>
+                                <input type="number" id="ce-max-integrantes" class="coach-input-premium" value="3" min="1" max="3">
+                            </div>
                         </div>
 
                         <div class="timestamp-group-premium">
                             <div class="timestamp-header-premium">
                                 <label class="coach-label-premium">Inicio del Concurso</label>
-                                <span class="type-badge-premium">timestamp</span>
                             </div>
                             <div class="timestamp-body-premium">
                                 <div class="time-sub-group">
-                                    <label class="time-label">Fecha</label>
-                                    <div class="input-with-icon">
-                                        <i class="fa-regular fa-calendar"></i>
-                                        <input type="date" id="ce-inicio-fecha" class="coach-input-premium">
-                                    </div>
-                                </div>
-                                <div class="time-sub-group">
-                                    <label class="time-label">Hora</label>
-                                    <div class="input-with-icon">
-                                        <i class="fa-regular fa-clock"></i>
-                                        <input type="time" id="ce-inicio-hora" class="coach-input-premium">
-                                    </div>
+                                    <input type="date" id="ce-inicio-fecha" class="coach-input-premium">
+                                    <input type="time" id="ce-inicio-hora" class="coach-input-premium">
                                 </div>
                             </div>
                         </div>
@@ -85,22 +94,11 @@ export const DashboardProfesorView = () => {
                         <div class="timestamp-group-premium">
                             <div class="timestamp-header-premium">
                                 <label class="coach-label-premium">Fin del Concurso</label>
-                                <span class="type-badge-premium">timestamp</span>
                             </div>
                             <div class="timestamp-body-premium">
                                 <div class="time-sub-group">
-                                    <label class="time-label">Fecha</label>
-                                    <div class="input-with-icon">
-                                        <i class="fa-regular fa-calendar"></i>
-                                        <input type="date" id="ce-fin-fecha" class="coach-input-premium">
-                                    </div>
-                                </div>
-                                <div class="time-sub-group">
-                                    <label class="time-label">Hora</label>
-                                    <div class="input-with-icon">
-                                        <i class="fa-regular fa-clock"></i>
-                                        <input type="time" id="ce-fin-hora" class="coach-input-premium">
-                                    </div>
+                                    <input type="date" id="ce-fin-fecha" class="coach-input-premium">
+                                    <input type="time" id="ce-fin-hora" class="coach-input-premium">
                                 </div>
                             </div>
                         </div>
@@ -289,6 +287,10 @@ function bindProfesorEvents() {
             return;
         }
 
+        const categoriaId = document.getElementById('ce-categoria').value;
+        const minInt = parseInt(document.getElementById('ce-min-integrantes').value) || 1;
+        const maxInt = parseInt(document.getElementById('ce-max-integrantes').value) || 3;
+
         const id = 'evt_' + Date.now();
         const btn = document.getElementById('btn-guardar-evento');
         btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Guardando...';
@@ -304,7 +306,10 @@ function bindProfesorEvents() {
             ts_fin: msFin,
             problemas: [],
             jueces_ids: [AuthState.user.email],
-            coaches_ids: []
+            coaches_ids: [],
+            categoria_id: categoriaId,
+            min_integrantes: minInt,
+            max_integrantes: maxInt
         });
 
         btn.innerHTML = 'Guardar Evento';
@@ -532,6 +537,54 @@ async function renderAdminJuezDetalles() {
     document.getElementById('admin-juez-estado').className = `estado-badge estado-${c.estado}`;
     document.getElementById('admin-juez-estado').textContent = c.estado.toUpperCase();
 
+    // Nueva info de categoría y miembros
+    const catInfoHTML = `
+        <div style="margin-top:0.5rem; display:flex; gap:10px; font-size:0.85rem; opacity:0.8;">
+            <span><i class="fa-solid fa-layer-group"></i> ${c.categoria_id || 'Estándar'}</span>
+            <span><i class="fa-solid fa-users"></i> ${c.min_integrantes || 1}-${c.max_integrantes || 3} miembros</span>
+        </div>
+    `;
+    document.getElementById('admin-juez-titulo').insertAdjacentHTML('afterend', catInfoHTML);
+
+    const actionsHTML = `
+        <div style="margin-top:1.5rem; display:flex; gap:1rem;">
+            <button class="btn btn-primary btn-sm" onclick="window.exportarResultadosCSV('${c.id}')">
+                <i class="fa-solid fa-file-csv"></i> Exportar Resultados (CSV)
+            </button>
+            <button class="btn btn-secondary btn-sm" onclick="window.router.navigate('/staff')">
+                <i class="fa-solid fa-parachute-box"></i> Panel de Staff (Globos)
+            </button>
+        </div>
+    `;
+    document.getElementById('admin-juez-detalles-content').insertAdjacentHTML('beforeend', actionsHTML);
+
+    // ── Monitor de Conexión (Sprint 2) ──
+    const monitorHTML = `
+        <div class="coach-card" style="margin-top:2rem; border-top:3px solid var(--tecnm-gold);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+                <h4 style="margin:0; color:var(--tecnm-gold);"><i class="fa-solid fa-tower-broadcast"></i> Monitor de Conexión</h4>
+                <span class="score-live-badge"><div class="live-dot"></div> LIVE</span>
+            </div>
+            <div class="coach-table-wrap">
+                <table class="coach-table">
+                    <thead>
+                        <tr>
+                            <th>Participante</th>
+                            <th>Equipo</th>
+                            <th>Última Actividad</th>
+                            <th>Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody id="admin-juez-monitor-body">
+                        <tr><td colspan="4" style="text-align:center; opacity:0.5;">Cargando presencia...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    `;
+    document.getElementById('admin-juez-detalles-content').insertAdjacentHTML('beforeend', monitorHTML);
+    renderMonitorConexion(c.id);
+
     // Timestamps Premium en Vista Admin
     const fi = new Date(c.fecha_inicio);
     const ff = new Date(c.fecha_fin);
@@ -704,7 +757,12 @@ async function renderAdminJuezDetalles() {
                     <strong style="color:var(--tecnm-blue);">P${idx + 1}</strong>: ${titulo}
                     ${p ? `<span class="diff-badge diff-${diffClass}" style="margin-left:10px;">${p.dificultad}</span>` : ''}
                 </div>
-                <button class="btn-tbl btn-tbl--danger" onclick="window._quitarProblema('${probId}')" title="Quitar"><i class="fa-solid fa-trash"></i></button>
+                <div style="display:flex; gap:8px;">
+                    <button class="btn btn-ghost btn-sm" onclick="window._editarProblemaAdmin('${probId}')" title="Editar Enunciado">
+                        <i class="fa-solid fa-pen-to-square" style="color:var(--tecnm-gold);"></i>
+                    </button>
+                    <button class="btn-tbl btn-tbl--danger" onclick="window._quitarProblema('${probId}')" title="Quitar"><i class="fa-solid fa-trash"></i></button>
+                </div>
             </li>`;
         }).join('');
     }
@@ -713,10 +771,32 @@ async function renderAdminJuezDetalles() {
     window._activarEventoAdmin = () => { AuthState.db.activarConcurso(c.id); renderAdminJuezDetalles(); };
     window._finalizarEventoAdmin = () => { AuthState.db.finalizarConcurso(c.id); renderAdminJuezDetalles(); };
 
-    window._quitarProblema = (probId) => {
-        c.problemas = c.problemas.filter(id => id !== probId);
-        AuthState.simulateDB.saveData();
-        renderAdminJuezDetalles();
+    window._quitarProblema = async (probId) => {
+        if (await UIModal.confirm('Quitar Problema', '¿Estás seguro de quitar este problema del concurso?')) {
+            c.problemas = c.problemas.filter(id => id !== probId);
+            await AuthState.db.saveConcurso(c);
+            renderAdminJuezDetalles();
+        }
+    };
+
+    window._editarProblemaAdmin = async (probId) => {
+        const prob = await AuthState.db.getProblemaById(probId);
+        if (!prob) return;
+
+        const nuevaDesc = await UIModal.prompt(
+            `Editar Enunciado: ${prob.titulo}`,
+            'Modifica el HTML/Texto del problema. Se enviará un anuncio si el concurso está activo.',
+            prob.descripcion || prob.desc || ''
+        );
+
+        if (nuevaDesc !== null && nuevaDesc !== (prob.descripcion || prob.desc)) {
+            await supabase.from('icpc_problemas').update({ descripcion: nuevaDesc }).eq('id', probId);
+            if (c.estado === 'activo') {
+                await AuthState.db.addAnuncio(c.id, `⚠️ El problema "${prob.titulo}" ha sido actualizado. Por favor, revisa el enunciado.`);
+            }
+            UIModal.alert('Éxito', 'Enunciado actualizado.');
+            renderAdminJuezDetalles();
+        }
     };
 
     window._mostrarSelectorProblemas = async () => {
@@ -796,6 +876,18 @@ if (typeof window !== 'undefined') {
 
         if (!nombreAlu || !emailAlu || !nombreEq) {
             UIModal.alert('Datos incompletos', 'Por favor llena el nombre completo, correo y equipo.');
+            return;
+        }
+
+        // Validación de tamaño de equipo (Sprint 1)
+        const concurso = await AuthState.db.getConcursoById(window.currentAdminConcursoId);
+        const maxMembers = concurso?.max_integrantes || 3;
+
+        const todosParticipantes = await AuthState.db.getParticipantesByCoachYConcurso(AuthState.user.email, window.currentAdminConcursoId);
+        const miembrosEquipo = (todosParticipantes || []).filter(p => p.equipo.toLowerCase().trim() === nombreEq.toLowerCase().trim());
+
+        if (miembrosEquipo.length >= maxMembers) {
+            UIModal.alert('Equipo Lleno', `El equipo "${nombreEq}" ya tiene el máximo permitido de ${maxMembers} integrantes para este concurso.`);
             return;
         }
 
@@ -918,3 +1010,67 @@ async function renderAdminCoachScoreboard() {
     }).join('');
 }
 
+window.exportarResultadosCSV = async (concursoId) => {
+    const subs = await AuthState.db.getSubmissionsByConcurso(concursoId);
+    if (!subs.length) { UIModal.alert('Sin Datos', 'No hay envíos para exportar.'); return; }
+
+    const equipos = {};
+    subs.forEach(s => {
+        if (!equipos[s.equipo]) equipos[s.equipo] = { total: 0, penalty: 0, probs: {} };
+        if (!equipos[s.equipo].probs[s.problema_id]) equipos[s.equipo].probs[s.problema_id] = { ac: false, tries: 0 };
+        if (s.veredicto === 'AC' && !equipos[s.equipo].probs[s.problema_id].ac) {
+            equipos[s.equipo].probs[s.problema_id].ac = true;
+            equipos[s.equipo].total++;
+            equipos[s.equipo].penalty += (equipos[s.equipo].probs[s.problema_id].tries * 20);
+        } else if (s.veredicto !== 'AC' && !equipos[s.equipo].probs[s.problema_id].ac) {
+            equipos[s.equipo].probs[s.problema_id].tries++;
+        }
+    });
+
+    const rows = Object.entries(equipos)
+        .sort((a, b) => b[1].total - a[1].total || a[1].penalty - b[1].penalty)
+        .map(([eq, data], i) => `${i + 1},"${eq}",${data.total},${data.penalty}`);
+
+    const csvHeader = "Rank,Equipo,Resueltos,Penalizacion\n";
+    const csvContent = "data:text/csv;charset=utf-8," + csvHeader + rows.join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `resultados_icpc_${concursoId}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+};
+
+window.renderMonitorConexion = async (concursoId) => {
+    const body = document.getElementById('admin-juez-monitor-body');
+    if (!body) return;
+
+    const { data: particip, error } = await supabase
+        .from('icpc_participantes')
+        .select('*')
+        .eq('concurso_id', concursoId);
+
+    if (error || !particip) return;
+
+    const now = new Date().getTime();
+
+    body.innerHTML = particip.map(p => {
+        const lastSeen = p.last_seen ? new Date(p.last_seen).getTime() : 0;
+        const diffSec = (now - lastSeen) / 1000;
+        const isOnline = diffSec < 60; // 1 minuto de margen
+
+        return `
+            <tr>
+                <td><strong>${p.nombre}</strong><br><small style="opacity:0.6;">${p.email}</small></td>
+                <td>${p.equipo}</td>
+                <td style="font-size:0.8rem;">${p.last_seen ? new Date(p.last_seen).toLocaleTimeString() : 'Nunca'}</td>
+                <td>
+                    ${isOnline
+                ? '<span class="status-pill--done" style="padding:2px 8px; border-radius:4px; font-size:0.7rem;">ONLINE</span>'
+                : '<span style="opacity:0.4; font-size:0.7rem;">OFFLINE</span>'}
+                </td>
+            </tr>
+        `;
+    }).join('');
+};

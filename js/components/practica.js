@@ -1,6 +1,6 @@
 import { AuthState } from '../core/authState.js';
-import { JudgeSim } from '../core/judgeSim.js';
-import { PROBLEMS_SEED } from '../data/problemsSeed.js';
+import { Judge0 } from '../core/judge0.js';
+import { UIModal } from './ui/modal.js';
 
 // ══════════════════════════════════════════════════════
 //  Área de Práctica — Sandbox sin auth, sin scoreboard
@@ -9,9 +9,10 @@ import { PROBLEMS_SEED } from '../data/problemsSeed.js';
 let practicaProblema = null;
 
 export const PracticaView = () => {
-    // Poblar db si está vacía (primer uso)
-    if (AuthState.db.getProblemas().length === 0) {
-        AuthState.db.saveProblemasLote(PROBLEMS_SEED);
+    // El Área de Práctica ahora es dinámica y requiere estar logueado para guardar progreso
+    if (!AuthState.user) {
+        setTimeout(() => window.router.navigate('/checkin-alumno'), 100);
+        return '<div>Redirigiendo...</div>';
     }
 
     setTimeout(() => {
@@ -127,18 +128,17 @@ function initPractica() {
     document.getElementById('btn-practica-enviar').addEventListener('click', () => probarPractica(true));
 }
 
-function renderPracticaList() {
+async function renderPracticaList() {
     const search = document.getElementById('practica-search')?.value?.toLowerCase() || '';
     const dif = document.getElementById('practica-dif')?.value || '';
     const tag = document.getElementById('practica-tag')?.value || '';
 
-    // Combinar: banco local + db (problemas del admin/codeforces)
-    const local = PROBLEMS_SEED;
-    const db = AuthState.db.getProblemas().filter(p => p.id.startsWith('cf_') || p.fuente === 'admin');
-    const todos = [...local, ...db.filter(dp => !local.find(l => l.id === dp.id))];
+    // Obtener problemas oficiales publicados
+    const todos = await AuthState.db.getProblemas();
+    const publicados = todos.filter(p => p.publicado);
 
-    const filtrado = todos.filter(p => {
-        const matchSearch = !search || p.titulo.toLowerCase().includes(search) || (p.tags || []).join(' ').includes(search);
+    const filtrado = publicados.filter(p => {
+        const matchSearch = !search || p.titulo.toLowerCase().includes(search) || (p.tags || []).some(t => t.toLowerCase().includes(search));
         const matchTag = !tag || (p.tags || []).includes(tag);
         const matchDif = !dif ||
             (dif === 'easy' && p.dificultad <= 1000) ||
@@ -161,9 +161,8 @@ function renderPracticaList() {
         '<p style="color:rgba(255,255,255,.3);text-align:center;padding:1.5rem;">Sin resultados.</p>';
 
     list.querySelectorAll('.practica-prob-item').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const prob = PROBLEMS_SEED.find(p => p.id === btn.dataset.pid)
-                || AuthState.db.getProblemaById(btn.dataset.pid);
+        btn.addEventListener('click', async () => {
+            const prob = await AuthState.db.getProblemaById(btn.dataset.pid);
             if (prob) seleccionarPracticaProblema(prob);
         });
     });
@@ -187,9 +186,16 @@ function seleccionarPracticaProblema(prob) {
         </div>`).join('');
 
     content.innerHTML = `
-        <div class="prob-render">
-            ${prob.desc}
-            ${ejemplos ? `<h4 class="ejemplos-title">Ejemplos</h4>${ejemplos}` : ''}
+        <div class="prob-render view-enter">
+            <h2 style="color:var(--tecnm-gold); margin-top:0;">${prob.titulo}</h2>
+            <div style="margin-bottom:1.5rem; display:flex; gap:10px;">
+                <span class="diff-badge diff-${prob.dificultad <= 1000 ? 'facil' : prob.dificultad <= 1400 ? 'medio' : 'dificil'}">Dificultad: ${prob.dificultad}</span>
+                ${(prob.tags || []).map(t => `<span style="background:rgba(255,255,255,0.1); padding:2px 8px; border-radius:4px; font-size:0.75rem;">${t}</span>`).join('')}
+            </div>
+            <div class="markdown-body" style="background:transparent; color:#cbd5e1; line-height:1.6;">
+                ${prob.descripcion || prob.desc || 'Sin descripción disponible.'}
+            </div>
+            ${ejemplos ? `<h4 class="ejemplos-title" style="margin-top:2rem; color:var(--tecnm-gold);">Ejemplos</h4>${ejemplos}` : ''}
         </div>`;
 
     document.getElementById('btn-practica-probar').disabled = false;
@@ -198,10 +204,12 @@ function seleccionarPracticaProblema(prob) {
     document.getElementById('practica-verd-badge').innerHTML = '';
 }
 
-function probarPractica(esEvaluar) {
+async function probarPractica(esEvaluar) {
     if (!practicaProblema) return;
     const code = document.getElementById('practica-code').value;
     const lang = document.getElementById('practica-lang').value;
+
+    if (!code.trim()) { UIModal.alert('Código Vacío', 'Por favor escribe algo de código antes de enviar.'); return; }
 
     const outputPanel = document.getElementById('practica-output-panel');
     const outputPre = document.getElementById('practica-output-pre');
@@ -209,21 +217,49 @@ function probarPractica(esEvaluar) {
     const outputTitle = document.getElementById('practica-output-title');
 
     outputPanel.className = 'arena-output-panel loading';
-    outputPre.textContent = '⏳ Evaluando...';
+    outputPre.textContent = '⏳ Evaluando en Judge0...';
     verdBadge.innerHTML = '';
 
-    setTimeout(() => {
-        const resultado = esEvaluar
-            ? JudgeSim.evaluate(code, lang, practicaProblema)
-            : JudgeSim.run(code, lang, (practicaProblema.ejemplos || [{}])[0]);
+    try {
+        const testCase = (practicaProblema.casos_prueba && practicaProblema.casos_prueba.length > 0)
+            ? practicaProblema.casos_prueba[0]
+            : { input: '', output: '' };
 
-        const veredicto = esEvaluar ? resultado.veredicto : (resultado.ok ? 'AC' : 'WA');
+        const result = await Judge0.submit(code, lang, testCase.input, testCase.output);
+
+        const veredicto = result.veredicto || (result.success ? 'AC' : 'WA');
+
         outputPanel.className = `arena-output-panel vp-${veredicto.toLowerCase()}`;
-        outputTitle.textContent = esEvaluar ? `Evaluación — ${resultado.tiempo_ms}ms` : 'Output (Ejemplo)';
+        outputTitle.textContent = `Veredicto — ${result.time || '0'}s`;
         verdBadge.innerHTML = `<span class="verd-badge verd-${veredicto.toLowerCase()}">${veredicto}</span>`;
-        outputPre.textContent = resultado.output || resultado.mensaje || '(sin salida)';
-        // Práctica NO registra submissions — es sandbox
-    }, 800);
+
+        if (result.stdout) {
+            outputPre.textContent = result.stdout;
+        } else if (result.compile_output) {
+            outputPre.textContent = `Error de Compilación:\n${result.compile_output}`;
+        } else if (result.stderr) {
+            outputPre.textContent = `Error:\n${result.stderr}`;
+        } else {
+            outputPre.textContent = '(sin salida estándar)';
+        }
+
+        // Registrar envíos de práctica para historial (opcional, pero útil)
+        await AuthState.db.addSubmission({
+            concurso_id: 'practice',
+            problema_id: practicaProblema.id,
+            equipo: AuthState.user.email, // En práctica usamos el email como identificador
+            codigo: code,
+            lenguaje: lang,
+            veredicto: veredicto,
+            tiempo_ms: Math.floor((parseFloat(result.time) || 0) * 1000),
+            memoria_kb: parseInt(result.memory) || 0
+        });
+
+    } catch (e) {
+        console.error(e);
+        outputPanel.className = 'arena-output-panel vp-se';
+        outputPre.textContent = 'Error de conexión con el juez.';
+    }
 }
 
 function updatePracticaLineNums() {

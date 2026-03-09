@@ -46,6 +46,12 @@ export const AdminPanelView = () => {
                 <button class="admin-nav-btn" data-tab="tab-concursos">
                     <i class="fa-solid fa-trophy"></i> Concursos
                 </button>
+                <button class="admin-nav-btn" data-tab="tab-sedes">
+                    <i class="fa-solid fa-building-user"></i> Gestión de Sedes
+                </button>
+                <button class="admin-nav-btn" data-tab="tab-analiticas">
+                    <i class="fa-solid fa-chart-line"></i> Analíticas
+                </button>
             </nav>
             <button class="admin-logout-btn" id="admin-logout">
                 <i class="fa-solid fa-right-from-bracket"></i> Cerrar Sesión
@@ -114,6 +120,71 @@ export const AdminPanelView = () => {
                 </div>
                 <!-- Paginación -->
                 <div class="admin-pagination" id="banco-pagination"></div>
+            </section>
+
+            <!-- TAB: Gestión de Sedes (Sede CRUD) -->
+            <section id="tab-sedes" class="admin-tab" style="display:none;">
+                <div class="admin-tab-header">
+                    <div>
+                        <h2 class="admin-tab-title">Gestión de Sedes</h2>
+                        <p class="admin-tab-sub">Administra los laboratorios y espacios físicos de competencia.</p>
+                    </div>
+                    <button class="btn-admin btn-admin--gold" id="btn-nueva-sede">
+                        <i class="fa-solid fa-plus"></i> Nueva Sede
+                    </button>
+                </div>
+                <div class="admin-table-wrap">
+                    <table class="admin-table">
+                        <thead>
+                            <tr>
+                                <th>Sede / Laboratorio</th>
+                                <th>Capacidad</th>
+                                <th>Estado</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="sedes-body"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- TAB: Analíticas -->
+            <section id="tab-analiticas" class="admin-tab" style="display:none;">
+                <div class="admin-tab-header">
+                    <div>
+                        <h2 class="admin-tab-title">Dashboard de Analíticas</h2>
+                        <p class="admin-tab-sub">Métricas globales de la plataforma en tiempo real.</p>
+                    </div>
+                </div>
+                
+                <div class="analytics-grid">
+                    <div class="analytics-card">
+                        <h3 class="acard-title"><i class="fa-solid fa-circle-check"></i> Veredictos Globales</h3>
+                        <div id="chart-veredictos" class="chart-container-bars"></div>
+                    </div>
+                    <div class="analytics-card">
+                        <h3 class="acard-title"><i class="fa-solid fa-code"></i> Lenguajes</h3>
+                        <div id="chart-lenguajes" class="chart-container-bars"></div>
+                    </div>
+                    <div class="analytics-card" style="display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center;">
+                        <div id="stat-activity" class="stat-big">—</div>
+                        <p class="stat-label">Submissions Hoy</p>
+                    </div>
+                </div>
+                
+                <style>
+                    .analytics-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1.5rem; margin-top: 1.5rem; }
+                    .analytics-card { background: #1e293b; padding: 1.5rem; border-radius: 16px; border: 1px solid rgba(255,255,255,0.05); }
+                    .acard-title { font-size: 0.9rem; color: var(--tecnm-gold); margin-bottom: 1.5rem; display: flex; align-items: center; gap: 8px; }
+                    .chart-container-bars { display: flex; flex-direction: column; gap: 10px; }
+                    .stat-big { font-size: 4rem; font-weight: 800; color: var(--tecnm-gold); }
+                    .stat-label { opacity: 0.6; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; }
+                    .chart-bar-wrap { display: flex; align-items: center; gap: 10px; }
+                    .chart-bar-label { width: 40px; font-size: 0.75rem; opacity: 0.8; }
+                    .chart-bar-bg { flex: 1; height: 8px; background: rgba(255,255,255,0.05); border-radius: 4px; overflow: hidden; }
+                    .chart-bar-fill { height: 100%; border-radius: 4px; transition: width 0.5s ease; }
+                    .chart-bar-val { font-size: 0.75rem; width: 30px; text-align: right; }
+                </style>
             </section>
 
             <!-- TAB: Editor de Problema -->
@@ -277,6 +348,7 @@ function bindAdminEvents() {
         document.getElementById('form-add-profesor').style.display = 'none';
     });
     document.getElementById('btn-save-profesor').addEventListener('click', saveProfesor);
+    document.getElementById('btn-nueva-sede').addEventListener('click', nuevaSede);
 
     renderBanco();
     renderProfesores();
@@ -287,9 +359,12 @@ function renderTab(tabId) {
     document.querySelectorAll('.admin-tab').forEach(t => t.style.display = 'none');
     const tab = document.getElementById(tabId);
     if (tab) tab.style.display = 'block';
+
     if (tabId === 'tab-banco') renderBanco();
     if (tabId === 'tab-profesores') renderProfesores();
     if (tabId === 'tab-concursos') renderConcursos();
+    if (tabId === 'tab-sedes') renderSedes();
+    if (tabId === 'tab-analiticas') renderAnaliticas();
 }
 
 async function renderBanco() {
@@ -355,6 +430,97 @@ function renderPaginacion(total) {
         btn.textContent = i;
         btn.onclick = () => { bancoPagina = i; renderBanco(); };
         pag.appendChild(btn);
+    }
+}
+
+async function renderSedes() {
+    const list = document.getElementById('sedes-body');
+    if (!list) return;
+    list.innerHTML = '<tr><td colspan="4" style="text-align:center;"><i class="fa-solid fa-spinner fa-spin"></i> Cargando sedes...</td></tr>';
+
+    const { data: sedes, error } = await supabase.from('icpc_sedes').select('*');
+    if (error) { list.innerHTML = '<tr><td colspan="4">Error al cargar sedes.</td></tr>'; return; }
+
+    list.innerHTML = sedes.map(s => `
+        <tr>
+            <td><strong>${s.nombre}</strong><br><small style="opacity:0.6;">${s.direccion || 'Sin dirección'}</small></td>
+            <td>${s.capacidad}</td>
+            <td><span class="status-pill--done" style="padding:2px 8px; border-radius:4px; font-size:0.7rem;">${s.activa ? 'ACTIVA' : 'INACTIVA'}</span></td>
+            <td class="acciones-cell">
+                <button class="btn-tbl btn-tbl--danger" onclick="window._deleteSede('${s.id}')"><i class="fa-solid fa-trash"></i></button>
+            </td>
+        </tr>
+    `).join('') || '<tr><td colspan="4" style="text-align:center;padding:2rem;opacity:.4;">No hay sedes registradas.</td></tr>';
+
+    window._deleteSede = async (id) => {
+        if (await UIModal.confirm('Eliminar Sede', '¿Seguro que deseas eliminar esta sede?')) {
+            await supabase.from('icpc_sedes').delete().eq('id', id);
+            renderSedes();
+        }
+    };
+}
+
+async function nuevaSede() {
+    const nombre = await UIModal.prompt('Nueva Sede', 'Nombre del Laboratorio / Espacio:', 'Lab A');
+    if (!nombre) return;
+    const cap = await UIModal.prompt('Capacidad', 'Número de computadoras:', '30');
+    if (!cap) return;
+
+    await supabase.from('icpc_sedes').insert({
+        nombre,
+        capacidad: parseInt(cap),
+        activa: true
+    });
+    renderSedes();
+}
+
+async function renderAnaliticas() {
+    const statActivity = document.getElementById('stat-activity');
+    const chartVeredictos = document.getElementById('chart-veredictos');
+    const chartLenguajes = document.getElementById('chart-lenguajes');
+
+    if (statActivity) statActivity.textContent = '...';
+
+    // 1. Submissions hoy
+    const { count } = await supabase
+        .from('icpc_submissions')
+        .select('*', { count: 'exact', head: true })
+        .gte('created_at', new Date(Date.now() - 86400000).toISOString());
+
+    if (statActivity) statActivity.textContent = count || 0;
+
+    // 2. Veredictos
+    const { data: subsV } = await supabase.from('icpc_submissions').select('veredicto');
+    const vCounts = (subsV || []).reduce((acc, s) => { acc[s.veredicto] = (acc[s.veredicto] || 0) + 1; return acc; }, {});
+    const vMax = Math.max(...Object.values(vCounts), 1);
+
+    if (chartVeredictos) {
+        chartVeredictos.innerHTML = Object.entries(vCounts).slice(0, 5).map(([v, c]) => `
+            <div class="chart-bar-wrap">
+                <span class="chart-bar-label">${v}</span>
+                <div class="chart-bar-bg">
+                    <div class="chart-bar-fill" style="width:${(c / vMax) * 100}%; background:${v === 'AC' ? '#22c55e' : '#ef4444'};"></div>
+                </div>
+                <span class="chart-bar-val">${c}</span>
+            </div>
+        `).join('') || '<p style="opacity:0.4;">Sin datos.</p>';
+    }
+
+    // 3. Lenguajes
+    const { data: subsL } = await supabase.from('icpc_submissions').select('lenguaje');
+    const lCounts = (subsL || []).reduce((acc, s) => { acc[s.lenguaje] = (acc[s.lenguaje] || 0) + 1; return acc; }, {});
+    const lMax = Math.max(...Object.values(lCounts), 1);
+
+    if (chartLenguajes) {
+        chartLenguajes.innerHTML = Object.entries(lCounts).slice(0, 5).map(([l, c]) => `
+            <div class="chart-bar-wrap">
+                <span class="chart-bar-label">${l}</span>
+                <div class="chart-bar-bg">
+                    <div class="chart-bar-fill" style="width:${(c / lMax) * 100}%; background:var(--tecnm-blue);"></div>
+                </div>
+                <span class="chart-bar-val">${c}</span>
+            </div>
+        `).join('') || '<p style="opacity:0.4;">Sin datos.</p>';
     }
 }
 

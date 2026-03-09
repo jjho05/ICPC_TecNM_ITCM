@@ -15,6 +15,13 @@ export const AuthState = {
         if (stored) this.user = JSON.parse(stored);
     },
 
+    async _hash(text) {
+        const msgUint8 = new TextEncoder().encode(text);
+        const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    },
+
     getRole() { return this.user?.type || null; },
     isAdmin() { return this.user?.type === 'admin'; },
     isProfesor() { return this.user?.type === 'profesor'; },
@@ -48,6 +55,11 @@ export const AuthState = {
             if (error) { console.error("Error fetching concursos", error); return []; }
             return data;
         },
+        async getCategorias() {
+            const { data, error } = await supabase.from('icpc_categorias').select('*');
+            if (error) { console.error("Error fetching categorias", error); return []; }
+            return data;
+        },
         async getConcursoById(id) {
             const { data, error } = await supabase.from('icpc_concursos').select('*').eq('id', id).single();
             if (error) return null;
@@ -61,9 +73,14 @@ export const AuthState = {
                 estado: concurso.estado || 'programado',
                 ts_inicio: concurso.ts_inicio,
                 ts_fin: concurso.ts_fin,
+                fecha_inicio: concurso.fecha_inicio,
+                fecha_fin: concurso.fecha_fin,
                 jueces_ids: concurso.jueces_ids || [],
                 coaches_ids: concurso.coaches_ids || [],
-                problemas: concurso.problemas || []
+                problemas: concurso.problemas || [],
+                categoria_id: concurso.categoria_id || 'division2',
+                max_integrantes: concurso.max_integrantes || 3,
+                min_integrantes: concurso.min_integrantes || 1
             }).select();
             if (error) console.error("Error saveConcurso:", error);
             return data;
@@ -228,19 +245,34 @@ export const AuthState = {
 
         // --- Usuarios (Profesores/Coaches/Jueces) ---
         async validateUsuario(email, password) {
+            const h = await AuthState._hash(password);
             const { data, error } = await supabase.from('icpc_usuarios')
                 .select('*')
                 .eq('email', email.toLowerCase())
-                .eq('password', password)
+                .eq('password', h) // Comparamos el hash
                 .single();
-            if (error || !data) return false;
+            if (error || !data) {
+                // Fallback temporal para contraseñas en texto plano (migración)
+                const { data: legacy } = await supabase.from('icpc_usuarios')
+                    .select('*')
+                    .eq('email', email.toLowerCase())
+                    .eq('password', password)
+                    .single();
+                if (legacy) {
+                    // Si entró con texto plano, actualizar a hash proactivamente
+                    await supabase.from('icpc_usuarios').update({ password: h }).eq('email', email.toLowerCase());
+                    return true;
+                }
+                return false;
+            }
             return true;
         },
         async registerUsuario(user) {
+            const h = await AuthState._hash(user.password);
             const { data, error } = await supabase.from('icpc_usuarios').insert({
                 email: user.email.toLowerCase(),
                 nombre: user.name,
-                password: user.password,
+                password: h, // Guardamos el hash
                 is_sysadmin: user.is_admin || false,
                 equipos_inscritos: []
             }).select();
@@ -329,14 +361,43 @@ export const AuthState = {
 
         // --- Submissions (Tiempo Real Supabase) ---
         async addSubmission(sub) {
-            const { error } = await supabase.from('icpc_submissions').insert({
-                concurso_id: window.currentConcursoId || 'GLOBAL',
+            const concursoId = window.currentConcursoId || 'GLOBAL';
+            const { data, error } = await supabase.from('icpc_submissions').insert({
+                concurso_id: concursoId,
                 problema_id: sub.problema_id,
                 equipo: sub.equipo,
                 veredicto: sub.veredicto,
+                codigo_fuente: sub.codigo_fuente || '',
+                lenguaje: sub.lenguaje || 'cpp',
                 timestamp: Date.now()
-            });
-            if (error) console.error("Error addSubmission:", error);
+            }).select().single();
+
+            if (error) {
+                console.error("Error addSubmission:", error);
+                return;
+            }
+
+            // ── Lógica de Globos (Sprint 2) ──
+            if (sub.veredicto === 'AC') {
+                // 1. Obtener color (si existe config)
+                const { data: config } = await supabase.from('icpc_globos_config')
+                    .select('color')
+                    .eq('concurso_id', concursoId)
+                    .eq('problema_id', sub.problema_id)
+                    .single();
+
+                const color = config?.color || '#cbd5e1'; // Gris por defecto si no hay config
+
+                // 2. Insertar entrega pendiente
+                await supabase.from('icpc_globos_delivery').insert({
+                    concurso_id: concursoId,
+                    equipo_nombre: sub.equipo,
+                    problema_id: sub.problema_id,
+                    color: color,
+                    entregado: false,
+                    ts_ac: new Date().toISOString()
+                });
+            }
         },
         async getSubmissionsByConcurso(concurso_id) {
             const { data, error } = await supabase.from('icpc_submissions')

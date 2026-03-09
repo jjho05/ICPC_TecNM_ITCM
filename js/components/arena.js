@@ -309,6 +309,18 @@ async function initArena() {
     subscribeToAnuncios(concurso.id);
     subscribeToClarificaciones(concurso.id);
 
+    // --- Heartbeat de Presencia (Sprint 2) ---
+    const updatePresencia = async () => {
+        if (!AuthState.user || !concurso.id) return;
+        await supabase.from('icpc_participantes')
+            .update({ last_seen: new Date().toISOString() })
+            .eq('email', AuthState.user.email)
+            .eq('concurso_id', concurso.id);
+    };
+    updatePresencia(); // Primer latido
+    if (window._arenaPresenceInterval) clearInterval(window._arenaPresenceInterval);
+    window._arenaPresenceInterval = setInterval(updatePresencia, 30000); // Cada 30 seg
+
     // ── Tabs ─────────────────────────────────────────────────────────
     document.querySelectorAll('.arena-tab').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -337,6 +349,64 @@ async function initArena() {
     const btnRefHist = document.getElementById('btn-refresh-historial');
     if (btnRefHist) btnRefHist.addEventListener('click', () => cargarHistorialEnvios(concurso.id));
 
+
+    // ── Anti-Cheat: Detección de Foco y Atajos ────────────────────────
+    window.registrarViolacion = async (tipo, descripcion, severidad = 'media') => {
+        console.warn(`[Anti-Cheat] Violación detectada: ${tipo} - ${descripcion}`);
+        const { error } = await supabase.from('icpc_violaciones').insert({
+            concurso_id: concurso.id,
+            alumno_email: AuthState.user.email,
+            equipo_nombre: AuthState.user.team || 'Sin Equipo',
+            tipo,
+            descripcion,
+            severidad
+        });
+        if (error) console.error("Error al registrar violación:", error);
+    };
+
+    // 1. Detección de cambio de pestaña (Visibility API)
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+            window.registrarViolacion('alt_tab', 'El usuario salió de la pestaña del concurso.', 'alta');
+        }
+    });
+
+    // 2. Detección de pérdida de foco de ventana
+    window.addEventListener('blur', () => {
+        window.registrarViolacion('focus_loss', 'La ventana del navegador perdió el foco.', 'media');
+    });
+
+    // 3. Bloqueo de atajos prohibidos
+    window.addEventListener('keydown', (e) => {
+        const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+        const cmdOrCtrl = isMac ? e.metaKey : e.ctrlKey;
+
+        // F12
+        if (e.key === 'F12') {
+            e.preventDefault();
+            window.registrarViolacion('devtools', 'Intento de abrir DevTools (F12)', 'alta');
+        }
+        // Ctrl+Shift+I / Cmd+Opt+I (Inspector)
+        if (cmdOrCtrl && e.shiftKey && e.key === 'I') {
+            e.preventDefault();
+            window.registrarViolacion('devtools', 'Intento de abrir Inspector (Shortcut)', 'alta');
+        }
+        // Ctrl+U / Cmd+Opt+U (Ver código fuente)
+        if (cmdOrCtrl && e.key === 'u') {
+            e.preventDefault();
+            window.registrarViolacion('view_source', 'Intento de ver código fuente', 'alta');
+        }
+        // Ctrl+S / Cmd+S (Guardar)
+        if (cmdOrCtrl && e.key === 's') {
+            e.preventDefault();
+            window.registrarViolacion('save_page', 'Intento de guardar página', 'baja');
+        }
+        // Ctrl+P / Cmd+P (Imprimir)
+        if (cmdOrCtrl && e.key === 'p') {
+            e.preventDefault();
+            window.registrarViolacion('print_page', 'Intento de imprimir', 'baja');
+        }
+    }, { capture: true });
 
     // ── Evento: enviar clarificación ──────────────────────────────────
     document.getElementById('btn-enviar-clarif').addEventListener('click', () => enviarClarificacion(concurso.id));
@@ -756,15 +826,27 @@ async function renderArenaScoreboardById(concursoId) {
     const problemas = (concurso.problemas || []).map(id => AuthState.db.getProblemaById(id)).filter(Boolean);
     const subs = await AuthState.db.getSubmissionsByConcurso(concursoId);
 
+    const isFrozen = concurso.ts_congela_at && Date.now() > new Date(concurso.ts_congela_at).getTime();
+    const freezeTime = isFrozen ? new Date(concurso.ts_congela_at).getTime() : Infinity;
+    const myTeam = AuthState.user.team || AuthState.user.email;
+
     const equipos = {};
     subs.forEach(s => {
+        // Lógica de Freeze: Si está congelado y el envío es posterior al freezeTime, 
+        // solo procesar si es de MI equipo.
+        const esMio = s.equipo === myTeam;
+        if (isFrozen && s.timestamp > freezeTime && !esMio) {
+            // Ignorar para el resto
+            return;
+        }
+
         if (!equipos[s.equipo]) equipos[s.equipo] = { probs: {}, total: 0, penalty: 0 };
         if (!equipos[s.equipo].probs[s.problema_id]) equipos[s.equipo].probs[s.problema_id] = { ac: false, tries: 0 };
 
         if (s.veredicto === 'AC' && !equipos[s.equipo].probs[s.problema_id].ac) {
             equipos[s.equipo].probs[s.problema_id].ac = true;
             equipos[s.equipo].total++;
-            // Penalización: (tries * 20) + min_desde_inicio (simplificado)
+            // Penalización básica
             equipos[s.equipo].penalty += (equipos[s.equipo].probs[s.problema_id].tries * 20);
         } else if (s.veredicto !== 'AC' && !equipos[s.equipo].probs[s.problema_id].ac) {
             equipos[s.equipo].probs[s.problema_id].tries++;
@@ -778,12 +860,14 @@ async function renderArenaScoreboardById(concursoId) {
         return;
     }
 
-    wrap.innerHTML = `<table class="scoreboard-table arena-score-sm">
+    wrap.innerHTML = `
+        ${isFrozen ? '<div class="sb-freeze-notice"><i class="fa-solid fa-snowflake"></i> ESCOREBOARD CONGELADO — Resultados finales ocultos</div>' : ''}
+        <table class="scoreboard-table arena-score-sm">
         <thead><tr><th>#</th><th>Equipo</th>${problemas.map((_, i) => `<th>${String.fromCharCode(65 + i)}</th>`).join('')}<th>AC</th><th>PEN</th></tr></thead>
         <tbody>${rows.map(([eq, data], i) => `
-            <tr class="${i === 0 ? 'rank-1' : ''} ${i === 1 ? 'rank-2' : ''}">
+            <tr class="${i === 0 ? 'rank-1' : ''} ${i === 1 ? 'rank-2' : ''} ${eq === myTeam ? 'my-team-row' : ''}">
                 <td>${i + 1}</td>
-                <td style="text-align:left; font-weight:600;">${eq}</td>
+                <td style="text-align:left; font-weight:600;">${eq === myTeam ? `<i class="fa-solid fa-star" style="color:var(--tecnm-gold);"></i> ${eq}` : eq}</td>
                 ${problemas.map(p => {
         const st = data.probs[p.id];
         const cls = st?.ac ? 'sb-ac' : (st?.tries > 0 ? 'sb-wa' : 'sb-empty');
