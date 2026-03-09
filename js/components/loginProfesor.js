@@ -17,9 +17,9 @@ export const LoginProfesorView = () => {
             btn.disabled = true;
 
             try {
-                const ok = await AuthState.db.validateUsuario(email, pass);
-                if (ok) {
-                    AuthState.loginAsProfesor(email, name || email.split('@')[0]);
+                const user = await AuthState.db.validateUsuario(email, pass);
+                if (user) {
+                    AuthState.loginAsProfesor(email, user.nombre || name || email.split('@')[0]);
                     window.router.navigate('/dashboard-profesor');
                 } else {
                     err.style.display = 'block';

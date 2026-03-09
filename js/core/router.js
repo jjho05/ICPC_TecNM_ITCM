@@ -9,6 +9,7 @@ import { ArenaView } from '../components/arena.js';
 import { PracticaView } from '../components/practica.js';
 import { StaffDashboardView } from '../components/staffDashboard.js';
 import { ProfileView } from '../components/profile.js';
+import { RegisterAdminView } from '../components/registerAdmin.js';
 import { AuthState } from './authState.js';
 
 // ── Definición de rutas ───────────────────────────────
@@ -17,6 +18,7 @@ const routes = {
     '/login-profesor': LoginProfesorView,
     '/register-profesor': RegisterProfesorView,
     '/login-admin': LoginAdminView,
+    '/register-admin': RegisterAdminView,
     '/dashboard-profesor': guardProfesor(DashboardProfesorView),
     '/admin': guardAdmin(AdminPanelView),
     '/checkin-alumno': CheckinAlumnoView,
@@ -36,7 +38,7 @@ function redirect(to) { setTimeout(() => window.router.navigate(to), 0); return 
 // ── Router ────────────────────────────────────────────
 export const initRouter = () => {
     const appRoot = document.getElementById('app-root');
-    
+
     // Función para obtener la ruta normalizada ignorando subdirectorios (ej: GitHub Pages)
     const getNormalizedPath = () => {
         let path = window.location.pathname;
@@ -49,7 +51,7 @@ export const initRouter = () => {
         // Como usamos history API, debemos forzar a que el punto de entrada sea '/' lógico.
         // Obtener el segmento final, o forzar siempre rutas como '/practica', '/arena'.
         // Si estamos en github pages, pathname es /ICPC_TecNM_ITCM/
-        const basePath = '/ICPC_TecNM_ITCM'; 
+        const basePath = '/ICPC_TecNM_ITCM';
         if (path.startsWith(basePath)) {
             path = path.slice(basePath.length);
         }

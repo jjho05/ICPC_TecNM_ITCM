@@ -8,19 +8,34 @@ export const LoginAdminView = () => {
     setTimeout(() => {
         const form = document.getElementById('admin-login-form');
         if (!form) return;
-        form.addEventListener('submit', (e) => {
+        form.addEventListener('submit', async (e) => {
             e.preventDefault();
             const email = document.getElementById('admin-email').value.trim();
             const pass = document.getElementById('admin-pass').value;
             const err = document.getElementById('admin-login-err');
+            const btn = form.querySelector('button[type="submit"]');
 
-            if (AuthState.db.isAdminCredentials(email, pass)) {
-                AuthState.loginAsAdmin(email, 'Administrador');
-                window.router.navigate('/admin');
-            } else {
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Validando...';
+            btn.disabled = true;
+
+            try {
+                const user = await AuthState.db.validateUsuario(email, pass);
+                if (user && user.is_sysadmin) {
+                    AuthState.loginAsAdmin(email, user.nombre || 'Administrador');
+                    window.router.navigate('/admin');
+                } else {
+                    err.style.display = 'block';
+                    err.textContent = user ? 'Acceso denegado: No tienes permisos de Administrador.' : 'Credenciales incorrectas.';
+                    btn.innerHTML = '<i class="fa-solid fa-unlock-keyhole"></i> Ingresar';
+                    btn.disabled = false;
+                    setTimeout(() => { err.style.display = 'none'; }, 4000);
+                }
+            } catch (e) {
+                console.error(e);
                 err.style.display = 'block';
-                err.textContent = 'Credenciales de administrador incorrectas.';
-                setTimeout(() => { err.style.display = 'none'; }, 4000);
+                err.textContent = 'Error de conexión con el servidor.';
+                btn.innerHTML = 'Re-intentar';
+                btn.disabled = false;
             }
         });
     }, 100);
@@ -50,7 +65,13 @@ export const LoginAdminView = () => {
                     <i class="fa-solid fa-unlock-keyhole"></i> Ingresar
                 </button>
             </form>
-            <p style="text-align:center;margin-top:1.25rem;">
+            <p style="text-align:center;margin-top:1.5rem;font-size:.9em;">
+                ¿Eres nuevo administrador? 
+                <a href="#" data-route="/register-admin" style="color:var(--tecnm-gold);font-weight:600;text-decoration:none;">
+                    Regístrate aquí
+                </a>
+            </p>
+            <p style="text-align:center;margin-top:1rem;">
                 <a href="#" data-route="/" style="color:rgba(255,255,255,.4);font-size:.85rem;text-decoration:none;">
                     <i class="fa-solid fa-arrow-left"></i> Volver al inicio
                 </a>

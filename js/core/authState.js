@@ -282,11 +282,11 @@ export const AuthState = {
                 if (legacy) {
                     // Si entró con texto plano, actualizar a hash proactivamente
                     await supabase.from('icpc_usuarios').update({ password: h }).eq('email', email.toLowerCase());
-                    return true;
+                    return legacy;
                 }
-                return false;
+                return null;
             }
-            return true;
+            return data;
         },
         async registerUsuario(user) {
             const h = await AuthState._hash(user.password);
