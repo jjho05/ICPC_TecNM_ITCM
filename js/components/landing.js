@@ -74,7 +74,7 @@ export const LandingView = () => {
                 <div class="section-line"></div>
             </div>
             <div id="landing-events-list" class="events-grid">
-                <div class="event-skeleton">Buscando nuevos retos...</div>
+                <div class="event-skeleton" style="font-size: 1.2rem; font-weight: 500; letter-spacing: 2px;"><i class="fa-solid fa-hourglass-half"></i> Próximamente...</div>
             </div>
         </section>
 
@@ -128,7 +128,7 @@ async function renderProximosConcursos() {
             .sort((a, b) => new Date(a.fecha_inicio) - new Date(b.fecha_inicio));
 
         if (programados.length === 0) {
-            list.innerHTML = '<div class="event-skeleton">No hay concursos programados próximamente. ¡Vuelve pronto!</div>';
+            list.innerHTML = '<div class="event-skeleton" style="font-size: 1.2rem; font-weight: 500; letter-spacing: 2px;"><i class="fa-solid fa-hourglass-half"></i> Próximamente...</div>';
             return;
         }
 
