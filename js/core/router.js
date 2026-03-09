@@ -36,20 +36,45 @@ function redirect(to) { setTimeout(() => window.router.navigate(to), 0); return 
 // ── Router ────────────────────────────────────────────
 export const initRouter = () => {
     const appRoot = document.getElementById('app-root');
-    let currentPath = window.location.pathname;
-    if (currentPath === '/index.html') currentPath = '/';
+    
+    // Función para obtener la ruta normalizada ignorando subdirectorios (ej: GitHub Pages)
+    const getNormalizedPath = () => {
+        let path = window.location.pathname;
+        if (path.includes('index.html')) {
+            path = path.split('index.html')[0];
+        }
+        // Asume que si hay un prefijo de repositorio, lo ignoramos o obtenemos solo el final.
+        // Forma robusta: si startsWith('/') y tiene más segmentos, intentamos extraer la ruta de la APP.
+        // Pero para la SPA que usa history API o anclas, lo mejor es basarse en el hash si fuera hash router.
+        // Como usamos history API, debemos forzar a que el punto de entrada sea '/' lógico.
+        // Obtener el segmento final, o forzar siempre rutas como '/practica', '/arena'.
+        // Si estamos en github pages, pathname es /ICPC_TecNM_ITCM/
+        const basePath = '/ICPC_TecNM_ITCM'; 
+        if (path.startsWith(basePath)) {
+            path = path.slice(basePath.length);
+        }
+        if (path === '' || path === '/' || path.endsWith('index.html')) return '/';
+        return path;
+    };
+
+    let currentPath = getNormalizedPath();
 
     window.router = {
         navigate(path) {
             if (currentPath === path) return;
             currentPath = path;
-            window.history.pushState({}, '', path);
+            // Al hacer pushState en subdirectorios hay que tener cuidado. 
+            // Añadir el basePath si estamos empujando a la URL
+            const isProd = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+            const basePath = isProd ? '/ICPC_TecNM_ITCM' : '';
+            window.history.pushState({}, '', basePath + path);
             render(path);
         },
         current() { return currentPath; }
     };
 
     const render = (path) => {
+        // En caso de que se intente ir a una ruta no mapeada, vuelve a inicio
         const view = routes[path] || routes['/'];
         appRoot.innerHTML = typeof view === 'function' ? view() : '';
 

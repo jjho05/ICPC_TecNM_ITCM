@@ -1,3 +1,4 @@
+import { initRouter } from './core/router.js';
 import { AuthState } from './core/authState.js';
 import { UIToast } from './components/ui/toast.js';
 
