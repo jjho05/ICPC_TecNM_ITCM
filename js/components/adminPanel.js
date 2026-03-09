@@ -63,8 +63,11 @@ export const AdminPanelView = () => {
                         <p class="admin-tab-sub" id="banco-count">Cargando...</p>
                     </div>
                     <div class="admin-header-actions">
+                        <button class="btn-admin btn-admin--ghost" id="btn-import-omegaup">
+                            <i class="fa-solid fa-globe"></i> OmegaUp (ES)
+                        </button>
                         <button class="btn-admin btn-admin--ghost" id="btn-import-cf">
-                            <i class="fa-solid fa-cloud-arrow-down"></i> Importar de Codeforces
+                            <i class="fa-solid fa-cloud-arrow-down"></i> Codeforces
                         </button>
                         <button class="btn-admin btn-admin--gold" id="btn-nuevo-problema">
                             <i class="fa-solid fa-plus"></i> Nuevo Problema
@@ -88,6 +91,7 @@ export const AdminPanelView = () => {
                         <option value="">Toda fuente</option>
                         <option value="local">Local</option>
                         <option value="codeforces">Codeforces</option>
+                        <option value="omegaup">OmegaUp 🇲🇽</option>
                         <option value="admin">Creado por Admin</option>
                     </select>
                 </div>
@@ -251,6 +255,7 @@ function bindAdminEvents() {
     });
 
     // Banco
+    document.getElementById('btn-import-omegaup').addEventListener('click', importarDeOmegaUp);
     document.getElementById('btn-import-cf').addEventListener('click', importarDeCodeforces);
     document.getElementById('btn-nuevo-problema').addEventListener('click', () => abrirEditor(null));
     document.getElementById('filter-search').addEventListener('input', () => { bancoPagina = 1; renderBanco(); });
@@ -563,3 +568,146 @@ async function renderConcursos() {
         a.download = `concurso_${id}.csv`; a.click();
     };
 }
+
+// ── Importar de OmegaUp (Problemas en ESPAÑOL) ────────────────────────────
+async function importarDeOmegaUp() {
+    const btn = document.getElementById('btn-import-omegaup');
+
+    // Modal de configuración interactiva
+    const config = await UIModal.confirm(
+        '🇲🇽 Importar desde OmegaUp',
+        `OmegaUp tiene más de 10,000 problemas en español (OMI, ICPC México).\n\n¿Deseas importar los 200 mejores problemas en español ordenados por calidad?\n\n(Los problemas se guardarán en Supabase y estarán disponibles para todos.)`
+    );
+    if (!config) return;
+
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Importando desde OmegaUp...';
+    btn.disabled = true;
+
+    try {
+        // OmegaUp API pública — no requiere autenticación para leer
+        const ROWCOUNT = 200;
+        const url = `https://omegaup.com/api/problem/list/?page=1&order_by=quality&offset=0&rowcount=${ROWCOUNT}&language=es`;
+
+        const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+        const data = await res.json();
+
+        if (data.status !== 'ok') throw new Error('OmegaUp API error: ' + data.status);
+
+        const problemas = data.results.map(p => {
+            // Mapear dificultad OmegaUp (0.0–3.0) → escala ICPC (800–2800)
+            const diff = mapOmegaUpDiff(p.difficulty);
+
+            // Limpiar tags: remover prefijos internos de OmegaUp
+            const tags = (p.tags || [])
+                .map(t => t.name)
+                .filter(t => !t.startsWith('problemLevel') && !t.startsWith('problemRestricted'))
+                .map(t => t
+                    .replace('problemTag', '')
+                    .replace('problemTopic', '')
+                    .replace(/([A-Z])/g, ' $1').trim()
+                )
+                .filter(Boolean)
+                .slice(0, 5);
+
+            return {
+                id: `ou_${p.alias}`,
+                titulo: p.title,
+                descripcion: buildOmegaUpDesc(p),
+                dificultad: diff,
+                tags,
+                fuente: 'omegaup',
+                tiempo_limite: 2000,
+                memoria_limite: 256,
+                casos_prueba: [],
+                publicado: true,
+                creado_por: 'omegaup-import'
+            };
+        });
+
+        await AuthState.db.saveProblemasLote(problemas);
+
+        btn.innerHTML = `<i class="fa-solid fa-check"></i> ${problemas.length} problemas en ES importados`;
+        setTimeout(() => {
+            btn.innerHTML = '<i class="fa-solid fa-globe"></i> OmegaUp (ES)';
+            btn.disabled = false;
+        }, 4000);
+        renderBanco();
+
+        UIModal.alert(
+            '✅ Importación Exitosa',
+            `Se importaron <strong>${problemas.length} problemas en español</strong> desde OmegaUp.\n\n` +
+            `Incluye problemas de: OMI, ICPC México, OMIPS y más.\n\n` +
+            `Puedes buscarlos filtrando por fuente "OmegaUp".`
+        );
+
+    } catch (e) {
+        console.error('OmegaUp import error:', e);
+        btn.innerHTML = '<i class="fa-solid fa-xmark"></i> Error';
+        btn.disabled = false;
+        setTimeout(() => { btn.innerHTML = '<i class="fa-solid fa-globe"></i> OmegaUp (ES)'; }, 3000);
+        UIModal.alert('Error de Importación', 'No se pudo conectar con OmegaUp. Verifica tu conexión a internet.');
+    }
+}
+
+/**
+ * Mapea la dificultad de OmegaUp (escala 0–3) a la escala Codeforces (800–2800)
+ * OmegaUp: 0=trivial, 1=fácil, 2=medio, 3=difícil
+ */
+function mapOmegaUpDiff(diff) {
+    if (!diff && diff !== 0) return 1200;
+    if (diff < 0.5) return 800;
+    if (diff < 1.0) return 1000;
+    if (diff < 1.5) return 1200;
+    if (diff < 2.0) return 1400;
+    if (diff < 2.5) return 1800;
+    if (diff < 3.0) return 2200;
+    return 2800;
+}
+
+/**
+ * Genera una descripción HTML para un problema de OmegaUp
+ */
+function buildOmegaUpDesc(p) {
+    const acRate = p.submissions > 0 ? ((p.accepted / p.submissions) * 100).toFixed(1) : 'N/A';
+    return `
+<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:1rem;margin-bottom:1rem;">
+    <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.75rem;">
+        <span style="background:#1a73e8;color:white;padding:3px 10px;border-radius:20px;font-size:.8rem;font-weight:700;">OmegaUp</span>
+        ${p.quality_seal ? '<span style="color:#f59e0b;font-size:.85rem;"><i class="fa-solid fa-seal"></i> Quality Seal</span>' : ''}
+    </div>
+    <p style="color:rgba(255,255,255,.6);font-size:.9rem;margin:0;">
+        Ver el enunciado completo en:
+        <a href="https://omegaup.com/arena/problem/${p.alias}/" target="_blank" style="color:var(--tecnm-gold);font-weight:600;">
+            omegaup.com/arena/problem/${p.alias}
+        </a>
+    </p>
+    <div style="display:flex;gap:1.5rem;margin-top:.75rem;font-size:.8rem;color:rgba(255,255,255,.4);">
+        <span><i class="fa-solid fa-check-circle" style="color:var(--status-ac);"></i> ${p.accepted} aceptados</span>
+        <span><i class="fa-solid fa-paper-plane"></i> ${p.submissions} envíos</span>
+        <span><i class="fa-solid fa-percent"></i> ${acRate}% aceptación</span>
+    </div>
+</div>
+<p style="color:rgba(255,255,255,.5);font-style:italic;font-size:.9rem;">
+    Este problema está disponible en español en OmegaUp. Haz clic en el enlace para ver el enunciado completo.
+</p>
+    `.trim();
+}
+
+/**
+ * Auto-traducir texto usando MyMemory API (gratuita, sin clave)
+ * Límite: ~5000 palabras/día por IP
+ */
+async function autoTraducirTexto(texto, de = 'en', a = 'es') {
+    try {
+        const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(texto)}&langpair=${de}|${a}`;
+        const res = await fetch(url);
+        const data = await res.json();
+        if (data.responseStatus === 200 && data.responseData?.translatedText) {
+            return data.responseData.translatedText;
+        }
+        return texto; // Fall back al original si falla
+    } catch {
+        return texto;
+    }
+}
+
