@@ -1,5 +1,5 @@
 import { AuthState } from '../core/authState.js';
-import { JudgeSim } from '../core/judgeSim.js';
+import { JudgeSim, VEREDICTOS } from '../core/judgeSim.js';
 import { ConcursoSecurity } from '../core/concursoSecurity.js';
 import { UIModal } from './ui/modal.js';
 
@@ -497,7 +497,7 @@ function seleccionarProblema(prob) {
 
 function probarCodigo(esEnvio) {
     if (!problemaActivo) {
-        UIModal.alert('Selecciona un problema', 'Debes elegir un problema de la lista antes de enviar.');
+        UIModal.alert('Selecciona un problema', 'Debes elegir un problema antes de enviar.');
         return;
     }
     const code = document.getElementById('arena-code').value;
@@ -509,36 +509,59 @@ function probarCodigo(esEnvio) {
     const outputTitle = document.getElementById('arena-output-title');
 
     outputPanel.className = 'arena-output-panel loading';
-    outputPre.textContent = '⏳ Evaluando...';
+    outputPre.textContent = '\u23F3 Evaluando...';
     verdBadge.innerHTML = '';
 
     setTimeout(async () => {
-        const resultado = esEnvio
-            ? JudgeSim.evaluate(code, lang, problemaActivo)
-            : JudgeSim.run(code, lang, (problemaActivo.ejemplos || [{}])[0]);
+        if (esEnvio) {
+            const resultado = JudgeSim.evaluate(code, lang, problemaActivo);
+            const v = resultado.veredicto;
+            const vInfo = VEREDICTOS[v] || { nombre: v, color: '#888', icon: 'fa-circle' };
 
-        const veredicto = esEnvio ? resultado.veredicto : (resultado.ok ? 'AC' : 'WA');
-        outputPanel.className = `arena-output-panel vp-${veredicto.toLowerCase()}`;
-        outputTitle.textContent = esEnvio ? `Envío — ${resultado.tiempo_ms}ms` : 'Probar (Ejemplo)';
-        verdBadge.innerHTML = `<span class="verd-badge verd-${veredicto.toLowerCase()}">${veredicto}</span>`;
-        outputPre.textContent = resultado.output || resultado.mensaje || '(sin salida)';
+            // Badge coloreado con nombre en español
+            verdBadge.innerHTML = `
+                <span class="verd-badge" style="background:${vInfo.color}20;color:${vInfo.color};border:1px solid ${vInfo.color}40;padding:.25rem .75rem;border-radius:20px;font-weight:700;font-size:.82rem;">
+                    <i class="fa-solid ${vInfo.icon}"></i>&nbsp;${v} — ${vInfo.nombre}
+                </span>`;
 
-        if (esEnvio && AuthState.isAlumno()) {
-            // Intentar obtener el ID del concurso desde la URL o el estado global
-            const concursoId = window.currentConcursoId;
-            if (!concursoId) return;
+            outputPanel.className = `arena-output-panel vp-${v.toLowerCase()}`;
+            outputTitle.textContent = `${esEnvio ? 'Envío' : 'Test'} — ${resultado.tiempo_ms}ms | ${Math.round((resultado.memoria_kb || 0) / 1024)}MB`;
+            outputPre.textContent = resultado.output
+                ? resultado.output
+                : resultado.mensaje || '(sin salida)';
 
-            await AuthState.db.addSubmission({
-                alumno_email: AuthState.user.email,
-                equipo: AuthState.user.team || AuthState.user.email,
-                problema_id: problemaActivo.id,
-                concurso_id: concursoId,
-                veredicto,
-                tiempo_ms: resultado.tiempo_ms
-            });
+            // Guardar submission en Supabase con código fuente
+            if (AuthState.isAlumno() && window.currentConcursoId) {
+                await AuthState.db.addSubmission({
+                    alumno_email: AuthState.user.email,
+                    equipo: AuthState.user.team || AuthState.user.email,
+                    problema_id: problemaActivo.id,
+                    concurso_id: window.currentConcursoId,
+                    veredicto: v,
+                    tiempo_ms: resultado.tiempo_ms,
+                    memoria_kb: resultado.memoria_kb || 0,
+                    codigo_fuente: code,
+                    lenguaje: lang
+                });
+            }
+        } else {
+            // Modo Probar (sin submission)
+            const ejemplo = (problemaActivo.casos_prueba || problemaActivo.ejemplos || [{}])[0];
+            const resultado = JudgeSim.run(code, lang, ejemplo);
+            const v = resultado.ok ? 'AC' : 'WA';
+            const vInfo = VEREDICTOS[v];
+
+            verdBadge.innerHTML = `
+                <span class="verd-badge" style="background:${vInfo.color}20;color:${vInfo.color};border:1px solid ${vInfo.color}40;padding:.25rem .75rem;border-radius:20px;font-weight:700;font-size:.82rem;">
+                    <i class="fa-solid ${vInfo.icon}"></i>&nbsp;${v}
+                </span>`;
+            outputPanel.className = `arena-output-panel vp-${v.toLowerCase()}`;
+            outputTitle.textContent = 'Prueba Local';
+            outputPre.textContent = resultado.output || '(sin salida)';
         }
-    }, 1000);
+    }, 900);
 }
+
 
 
 // ── SISTEMA DE TIEMPO REAL Y SINCRONIZACIÓN ──

@@ -1,7 +1,19 @@
 // ══════════════════════════════════════════════════════
 //  JudgeSim — Evaluador simulado de código
-//  No ejecuta código real, simula veredictos con heurísticas
+//  Simula el comportamiento de un juez ICPC real:
+//  Veredictos: AC | WA | TLE | MLE | RE | CE | PE
 // ══════════════════════════════════════════════════════
+
+// Colores y nombres en español para cada veredicto
+export const VEREDICTOS = {
+    AC: { nombre: 'Aceptado', color: '#22c55e', icon: 'fa-circle-check' },
+    WA: { nombre: 'Respuesta Incorrecta', color: '#ef4444', icon: 'fa-circle-xmark' },
+    TLE: { nombre: 'T\u00edmite de Tiempo', color: '#f59e0b', icon: 'fa-clock' },
+    MLE: { nombre: 'L\u00edmite de Memoria', color: '#8b5cf6', icon: 'fa-memory' },
+    RE: { nombre: 'Error de Ejecuci\u00f3n', color: '#f97316', icon: 'fa-bomb' },
+    CE: { nombre: 'Error de Compilaci\u00f3n', color: '#6b7280', icon: 'fa-code' },
+    PE: { nombre: 'Error de Presentaci\u00f3n', color: '#06b6d4', icon: 'fa-align-left' },
+};
 
 export const JudgeSim = {
 
@@ -9,119 +21,152 @@ export const JudgeSim = {
      * Evalúa un envío y retorna un veredicto simulado.
      * @param {string} code     - Código fuente del alumno
      * @param {string} lang     - 'cpp' | 'java' | 'python'
-     * @param {object} problema - Objeto del problema con testcases y ejemplos
-     * @returns {{ veredicto, tiempo_ms, output, mensaje }}
+     * @param {object} problema - Objeto del problema (casos_prueba o ejemplos)
+     * @param {number} tiempoLimite - ms límite (default 2000)
+     * @returns {{ veredicto, tiempo_ms, memoria_kb, output, mensaje, penaliza }}
      */
-    evaluate(code, lang, problema) {
-        const startTime = performance.now();
+    evaluate(code, lang, problema, tiempoLimite = 2000) {
 
-        // CE — Código vacío o demasiado corto
+        // ── CE: Código vacío o sin estructura mínima ──────────────────
         if (!code || code.trim().length < 5) {
-            return this._result('CE', 0, '', 'Código fuente vacío o incompleto.');
+            return this._result('CE', 0, 0, '', 'Código fuente vacío o incompleto.', false);
+        }
+        const ceCheck = this._checkCompilationErrors(code, lang);
+        if (ceCheck) return this._result('CE', 0, 0, '', ceCheck, false);
+
+        // ── TLE: Loops infinitos detectable estáticamente ─────────────
+        if (this._hasInfiniteLoop(code)) {
+            return this._result('TLE', tiempoLimite + 1, 0, '', 'Tiempo límite excedido (posible bucle infinito).', true);
         }
 
-        // CE — Detectar errores de sintaxis evidentes por lenguaje
-        if (lang === 'cpp' && !code.includes('main')) {
-            return this._result('CE', 0, '', 'No se encontró función main.');
-        }
-        if (lang === 'java' && !code.includes('class')) {
-            return this._result('CE', 0, '', 'No se encontró definición de clase.');
-        }
-        if (lang === 'python' && code.includes('def main') === false && code.trim().length < 10) {
-            return this._result('CE', 0, '', 'Código Python parece incompleto.');
+        // ── Simular tiempo y memoria ──────────────────────────────────
+        const tiempo_ms = Math.floor(Math.random() * 600) + 15;
+        const memoria_kb = Math.floor(Math.random() * 40000) + 4096; // 4–44 MB
+
+        // ── TLE: tiempo > límite (5% de probabilidad extra) ──────────
+        if (tiempo_ms > tiempoLimite || Math.random() < 0.05) {
+            return this._result('TLE', tiempoLimite + Math.floor(Math.random() * 500), memoria_kb, '', 'Tiempo límite excedido.', true);
         }
 
-        // TLE — Loops infinitos evidentes
-        const tlePatterns = [/while\s*\(\s*true\s*\)/i, /while\s*\(\s*1\s*\)/, /for\s*\(\s*;\s*;\s*\)/];
-        if (tlePatterns.some(p => p.test(code))) {
-            return this._result('TLE', 2001, '', 'Límite de tiempo excedido (loop infinito detectado).');
+        // ── MLE: memoria excede 256 MB (3% de probabilidad) ──────────
+        if (memoria_kb > 262144 || Math.random() < 0.03) {
+            return this._result('MLE', tiempo_ms, 268000, '', 'Límite de memoria excedido (> 256 MB).', true);
         }
 
-        // Simular tiempo de ejecución (entre 20ms y 1800ms)
-        const tiempo_ms = Math.floor(Math.random() * 400) + 20;
+        // ── Resolver contra casos de prueba ───────────────────────────
+        const casos = problema.casos_prueba?.length
+            ? problema.casos_prueba
+            : (problema.testcases || problema.ejemplos || []);
 
-        // Evaluar contra casos de prueba del problema
-        const testcases = problema.testcases?.length
-            ? problema.testcases
-            : problema.ejemplos || [];
-
-        if (testcases.length === 0) {
-            // Sin casos de prueba → AC por defecto si el código no está vacío
-            return this._result('AC', tiempo_ms, '(sin salida real)', '');
+        if (!casos.length) {
+            // Sin casos → AC si código no vacío
+            return this._result('AC', tiempo_ms, memoria_kb, '(sin salida verificable)', '¡Código enviado exitosamente!', false);
         }
 
-        // Simular salida para el primer caso de prueba
-        const primerCaso = testcases[0];
-        const simulatedOutput = this._simulateOutput(code, lang, primerCaso.input, primerCaso.expected || primerCaso.output);
+        // Evaluar todos los casos (hasta los primeros 5 para performance)
+        for (let i = 0; i < Math.min(casos.length, 5); i++) {
+            const tc = casos[i];
+            const expected = (tc.salida_esperada || tc.output || tc.expected || '').trim();
+            const simulated = this._simulateOutput(code, lang, tc.input || tc.entrada || '', expected);
 
-        const elapsed = performance.now() - startTime;
-        const correct = this._compareOutput(simulatedOutput, primerCaso.expected || primerCaso.output);
+            // RE: 8% de probabilidad si respuesta incorrecta
+            if (!this._compareOutput(simulated, expected) && Math.random() < 0.08) {
+                return this._result('RE', tiempo_ms, memoria_kb, simulated,
+                    `Error de ejecución en caso ${i + 1}: segmentation fault / null pointer.`, true);
+            }
 
-        // RE — Error de runtime simulado (10% de probabilidad si no está vacío)
-        if (!correct && Math.random() < 0.08) {
-            return this._result('RE', tiempo_ms, simulatedOutput, 'Runtime Error: excepción en tiempo de ejecución.');
+            if (!this._compareOutput(simulated, expected)) {
+                // PE: si la respuesta es "casi" correcta (espacios/newlines distintos)
+                if (simulated.trim().replace(/\s+/g, ' ') === expected.trim().replace(/\s+/g, ' ')) {
+                    return this._result('PE', tiempo_ms, memoria_kb, simulated,
+                        `Error de presentación en caso ${i + 1}: formato de salida incorrecto (espacios/newlines).`, true);
+                }
+                return this._result('WA', tiempo_ms, memoria_kb, simulated,
+                    `Respuesta incorrecta en caso ${i + 1}.`, true);
+            }
         }
 
-        return this._result(
-            correct ? 'AC' : 'WA',
-            tiempo_ms,
-            simulatedOutput,
-            correct ? '¡Respuesta correcta!' : 'Respuesta incorrecta.'
-        );
+        return this._result('AC', tiempo_ms, memoria_kb,
+            casos[0] ? (casos[0].salida_esperada || casos[0].output || casos[0].expected || '') : '',
+            '¡Respuesta Correcta! Todos los casos de prueba pasaron.', false);
     },
 
     /**
-     * "Probar" — Ejecuta contra el ejemplo visible (modo práctica)
-     * Solo verifica el primer ejemplo. No guarda submission.
+     * Modo "Probar" — Solo ejecuta contra el primer ejemplo visible, sin guardar.
      */
     run(code, lang, ejemplo) {
         if (!code || code.trim().length < 5) {
             return { output: '-- Error de compilación: código vacío --', ok: false };
         }
-        const simulated = this._simulateOutput(code, lang, ejemplo.input, ejemplo.output);
-        const ok = this._compareOutput(simulated, ejemplo.output);
+        const ceCheck = this._checkCompilationErrors(code, lang);
+        if (ceCheck) return { output: `-- Error de compilación: ${ceCheck} --`, ok: false };
+
+        const expected = (ejemplo.salida_esperada || ejemplo.output || ejemplo.expected || '').trim();
+        const simulated = this._simulateOutput(code, lang, ejemplo.input || ejemplo.entrada || '', expected);
+        const ok = this._compareOutput(simulated, expected);
         return { output: simulated, ok };
     },
 
-    // ── Internos ───────────────────────────────────────
+    // ── Internos ─────────────────────────────────────────────────────
 
-    _result(veredicto, tiempo_ms, output, mensaje) {
-        return { veredicto, tiempo_ms, output, mensaje };
+    _result(veredicto, tiempo_ms, memoria_kb, output, mensaje, penaliza) {
+        return { veredicto, tiempo_ms, memoria_kb, output, mensaje, penaliza };
     },
 
-    /**
-     * Simula la salida del programa.
-     * Si el código contiene literalmente el expected output, retorna AC.
-     * De lo contrario genera salida "plausible" o incorrecta.
-     */
+    _checkCompilationErrors(code, lang) {
+        if (lang === 'cpp') {
+            if (!code.includes('main')) return 'No se encontró función main().';
+            if ((code.match(/{/g) || []).length !== (code.match(/}/g) || []).length) return 'Llaves {} no balanceadas.';
+        }
+        if (lang === 'java') {
+            if (!code.includes('class')) return 'No se encontró definición de clase.';
+            if (!code.includes('main')) return 'No se encontró método main.';
+        }
+        if (lang === 'python') {
+            const indentError = / {1,3}[^\s]/.test(code) && !/^( {4}|\t)/.test(code.split('\n').find(l => l.startsWith(' ')) || '');
+            if (indentError && code.includes(':') && !code.startsWith('#')) return 'Posible error de indentación.';
+        }
+        return null;
+    },
+
+    _hasInfiniteLoop(code) {
+        return [
+            /while\s*\(\s*true\s*\)/i,
+            /while\s*\(\s*1\s*\)/,
+            /for\s*\(\s*;\s*;\s*\)/,
+            /while True:/
+        ].some(p => p.test(code));
+    },
+
     _simulateOutput(code, lang, input, expected) {
         const exp = (expected || '').trim();
-
-        // Heurística: si el código menciona el expected output como literal → AC simulado
+        // Si el código hardcodea literalmente la respuesta → AC simulado
         if (exp && code.includes(exp)) return exp;
 
-        // Si el código parece resolver el problema (tiene operaciones relevantes)
         const hasArith = /[+\-*\/]/.test(code);
-        const hasIO = /print|cout|System\.out|printf|scanf|input/.test(code);
+        const hasIO = /print|cout|System\.out|printf|scanf|input|cin/.test(code);
 
-        if (hasIO && hasArith && exp) {
-            // 60% de probabilidad de respuesta correcta si el código parece completo
-            return Math.random() < 0.6 ? exp : this._mutateOutput(exp);
+        if (hasIO && exp) {
+            // 65% de AC si el código parece completo y tiene I/O+aritmética
+            const prob = hasArith ? 0.65 : 0.45;
+            return Math.random() < prob ? exp : this._mutateOutput(exp);
         }
-
         return exp ? this._mutateOutput(exp) : '0';
     },
 
-    /** Muta ligeramente el expected output para simular WA */
     _mutateOutput(str) {
         const n = parseInt(str);
         if (!isNaN(n)) return String(n + (Math.random() > 0.5 ? 1 : -1));
         if (str.toLowerCase() === 'yes') return 'No';
         if (str.toLowerCase() === 'no') return 'Yes';
+        if (str.toLowerCase() === 'si') return 'No';
+        const lines = str.split('\n');
+        if (lines.length > 1) return lines.slice(0, -1).join('\n'); // Quitar última línea
         return str.split('').reverse().join('');
     },
 
     _compareOutput(actual, expected) {
+        if (!actual && !expected) return true;
         if (!actual || !expected) return false;
         return actual.trim().toLowerCase() === expected.trim().toLowerCase();
     }
