@@ -719,7 +719,7 @@
 .sb-total {
     font-size: 1.1rem;
     font-weight: 700;
-    color: var(--tecnm-blue);
+    color: var(--status-ac);
 }
 
 .sb-pen {
@@ -731,20 +731,13 @@
 }
 
 .sb-ac {
-    color: #28a745;
+    color: var(--status-ac);
     font-weight: 700;
 }
 
 .sb-wa {
-    color: var(--status-re);
+    color: var(--status-wa);
     font-weight: 500;
-}
-
-.scoreboard-table td small {
-    display: block;
-    font-size: 0.7rem;
-    color: var(--tecnm-text-muted);
-    margin-top: 2px;
 }
 
 .scoreboard-table tr.rank-1 td {
@@ -752,9 +745,569 @@
 }
 
 .scoreboard-table tr.rank-2 td {
-    background: rgba(192, 192, 192, 0.1);
+    background: rgba(192, 192, 192, 0.07);
 }
 
 .scoreboard-table tr.rank-3 td {
-    background: rgba(205, 127, 50, 0.1);
+    background: rgba(205, 127, 50, 0.07);
+}
+
+
+/* ════════════════════════════════════════════════════
+   ARENA — UI PREMIUM (Split-Pane completo)
+   Inspirado en Replit / Codeforces / CP-Editor
+════════════════════════════════════════════════════ */
+
+/* Fondo y contenedor raíz */
+.arena-root {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    background: #0a0f1c;
+    color: #cdd6f4;
+    overflow: hidden;
+    font-family: var(--font-sans);
+}
+
+/* ── Topbar ── */
+.arena-topbar {
+    height: 48px;
+    min-height: 48px;
+    background: #0d1424;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 1rem;
+    gap: 1rem;
+    z-index: 10;
+    flex-shrink: 0;
+}
+
+.arena-topbar-left {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex: 1;
+}
+
+.arena-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: white;
+    white-space: nowrap;
+    letter-spacing: 0.5px;
+}
+
+.arena-prob-pills {
+    display: flex;
+    gap: 0.4rem;
+    overflow-x: auto;
+}
+
+.arena-prob-pill {
+    padding: 3px 12px;
+    border-radius: 20px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--tecnm-text-muted);
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.arena-prob-pill:hover,
+.arena-prob-pill.active {
+    background: var(--tecnm-gold);
+    border-color: var(--tecnm-gold);
+    color: #000;
+}
+
+.arena-topbar-center {
+    flex: 0 0 auto;
+}
+
+.arena-timer-topbar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 5px 14px;
+    border-radius: 20px;
+    font-family: var(--font-mono);
+    font-size: 1rem;
+    font-weight: 700;
+    color: #22c55e;
+    letter-spacing: 1px;
+    transition: color 0.5s;
+}
+
+.arena-timer-topbar.warning {
+    color: #f59e0b;
+}
+
+.arena-timer-topbar.danger {
+    color: #ef4444;
+    animation: pulse-danger 1s ease-in-out infinite;
+}
+
+@keyframes pulse-danger {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.6;
+    }
+}
+
+.arena-topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex: 1;
+    justify-content: flex-end;
+}
+
+.arena-team-badge {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.8rem;
+    color: var(--tecnm-text-muted);
+    background: rgba(255, 255, 255, 0.04);
+    padding: 4px 12px;
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.arena-exit-btn {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.25);
+    color: #ef4444;
+    padding: 5px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: all 0.2s;
+}
+
+.arena-exit-btn:hover {
+    background: rgba(239, 68, 68, 0.2);
+    border-color: rgba(239, 68, 68, 0.5);
+}
+
+/* ── Split Layout ── */
+.arena-split {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+}
+
+/* ── Panel Izquierdo: Problema ── */
+.arena-left {
+    width: 420px;
+    min-width: 300px;
+    max-width: 500px;
+    background: #0f1722;
+    border-right: 1px solid rgba(255, 255, 255, 0.06);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.arena-left-tabs {
+    display: flex;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    background: #0d1424;
+    flex-shrink: 0;
+}
+
+.arena-tab {
+    flex: 1;
+    background: none;
+    border: none;
+    color: var(--tecnm-text-muted);
+    padding: 0.7rem 1rem;
+    font-size: 0.82rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    border-bottom: 2px solid transparent;
+}
+
+.arena-tab:hover {
+    color: white;
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.arena-tab.active {
+    color: var(--tecnm-gold);
+    border-bottom-color: var(--tecnm-gold);
+    background: rgba(214, 161, 51, 0.05);
+}
+
+.arena-tab-content {
+    flex: 1;
+    overflow-y: auto;
+}
+
+.arena-prob-render {
+    padding: 1.25rem 1.5rem;
+    line-height: 1.75;
+    color: #cdd6f4;
+}
+
+.arena-prob-render h2 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: white;
+    margin-bottom: 0.5rem;
+}
+
+.arena-prob-render h3,
+.arena-prob-render h4 {
+    color: var(--tecnm-gold);
+    margin: 1.25rem 0 0.5rem;
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.arena-prob-render p {
+    margin-bottom: 0.75rem;
+    font-size: 0.92rem;
+}
+
+.arena-prob-render pre,
+.arena-prob-render code {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 6px;
+    padding: 0.75rem 1rem;
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    overflow-x: auto;
+}
+
+.arena-waiting {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    gap: 1rem;
+    color: rgba(255, 255, 255, 0.3);
+    padding: 3rem;
+}
+
+/* Ejemplos IO */
+.ejemplo-block {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+}
+
+.ejemplo-header {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--tecnm-text-muted);
+    margin-bottom: 0.3rem;
+    letter-spacing: 0.5px;
+}
+
+.ejemplo-pre {
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 6px;
+    padding: 0.6rem 0.8rem;
+    font-family: var(--font-mono);
+    font-size: 0.82rem;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+/* Scoreboard en Arena */
+.arena-scoreboard-wrap {
+    padding: 1rem;
+}
+
+/* ── Panel Derecho: Editor ── */
+.arena-right {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background: #1e1e2e;
+    overflow: hidden;
+    min-width: 0;
+}
+
+/* Toolbar del editor */
+.arena-editor-bar {
+    height: 44px;
+    min-height: 44px;
+    background: #181825;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 1rem;
+    gap: 1rem;
+    flex-shrink: 0;
+}
+
+.arena-editor-bar-left,
+.arena-editor-bar-right {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.arena-lang-sel {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: white;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 0.82rem;
+    cursor: pointer;
+}
+
+.arena-lang-sel:focus {
+    outline: none;
+    border-color: var(--tecnm-gold);
+}
+
+/* Botones de la barra del editor */
+.arena-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 5px 14px;
+    border-radius: 7px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s;
+}
+
+.arena-btn--ghost {
+    background: rgba(255, 255, 255, 0.06);
+    color: #cdd6f4;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.arena-btn--ghost:hover {
+    background: rgba(255, 255, 255, 0.12);
+}
+
+.arena-btn--submit {
+    background: linear-gradient(135deg, #1B396A, #2A5298);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.arena-btn--submit:hover:not(:disabled) {
+    filter: brightness(1.15);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 15px rgba(27, 57, 106, 0.5);
+}
+
+.arena-btn--submit:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* Editor wrap con números de línea */
+.arena-editor-wrap {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+    position: relative;
+}
+
+.arena-line-nums {
+    width: 44px;
+    min-width: 44px;
+    background: #181825;
+    color: rgba(255, 255, 255, 0.2);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.6;
+    padding: 0.8rem 0.4rem;
+    text-align: right;
+    user-select: none;
+    border-right: 1px solid rgba(255, 255, 255, 0.04);
+    overflow: hidden;
+    white-space: pre;
+}
+
+.arena-code {
+    flex: 1;
+    background: #1e1e2e;
+    color: #cdd6f4;
+    border: none;
+    padding: 0.8rem 1rem;
+    font-family: var(--font-mono);
+    font-size: 14px;
+    line-height: 1.6;
+    resize: none;
+    outline: none;
+    overflow-y: auto;
+    tab-size: 4;
+    white-space: pre;
+    overflow-x: auto;
+}
+
+.arena-code::placeholder {
+    color: rgba(255, 255, 255, 0.15);
+}
+
+.arena-code:focus {
+    outline: none;
+}
+
+/* Output Panel */
+.arena-output {
+    height: 190px;
+    min-height: 120px;
+    background: #13111f;
+    border-top: 1px solid rgba(255, 255, 255, 0.07);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+}
+
+.arena-output-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.4rem 1rem;
+    background: #0f0d1a;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    min-height: 34px;
+}
+
+.arena-output-label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--tecnm-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.arena-output-clear {
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.2);
+    font-size: 0.75rem;
+    cursor: pointer;
+    margin-left: auto;
+    padding: 2px 6px;
+    border-radius: 4px;
+    transition: 0.2s;
+}
+
+.arena-output-clear:hover {
+    color: #ef4444;
+    background: rgba(239, 68, 68, 0.1);
+}
+
+.arena-output-pre {
+    flex: 1;
+    padding: 0.6rem 1rem;
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    color: #cdd6f4;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    line-height: 1.5;
+}
+
+/* Output panel states */
+#arena-output-panel.vp-ac {
+    border-top-color: var(--status-ac);
+}
+
+#arena-output-panel.vp-wa {
+    border-top-color: var(--status-wa);
+}
+
+#arena-output-panel.vp-tle {
+    border-top-color: var(--status-tle);
+}
+
+#arena-output-panel.loading {
+    border-top-color: var(--status-pending);
+}
+
+/* Veredicto Badge */
+.verd-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 10px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+}
+
+.verd-ac {
+    background: rgba(34, 197, 94, 0.15);
+    color: #22c55e;
+    border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.verd-wa {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.verd-tle {
+    background: rgba(245, 158, 11, 0.15);
+    color: #f59e0b;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.verd-re {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+/* Scrollbar personalizado para la Arena */
+.arena-root ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+.arena-root ::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.arena-root ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+}
+
+.arena-root ::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.2);
 }

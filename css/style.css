@@ -1,34 +1,55 @@
 :root {
-    /* Paleta Institucional TecNM & Gobierno de México */
-    --gob-guinda: #9d2449;
-    --gob-oro: #b38e5d;
+    /* ── Paleta Institucional TecNM ── */
     --tecnm-blue: #1B396A;
     --tecnm-blue-light: #2A5298;
     --tecnm-gold: #D6A133;
     --tecnm-gold-hover: #e8b13d;
+
+    /* ── Fondos ── */
     --tecnm-gray-bg: #0d1626;
-    /* Fondo oscuro global de la landing */
+    --tecnm-dark: #0d1626;
+    /* Alias necesario para panel.css */
+    --tecnm-card-bg: #111c2d;
+    --tecnm-surface: #162032;
     --tecnm-white: #FFFFFF;
+
+    /* ── Texto ── */
+    --tecnm-text: #e2e8f0;
+    /* Alias global */
     --tecnm-text-main: #e2e8f0;
-    /* Texto claro por defecto */
     --tecnm-text-muted: #94a3b8;
 
-    /* Estados Semánticos (Juez) */
-    --status-ac: #28A745;
-    /* Accepted (Verde) */
-    --status-wa: #DC3545;
-    /* Wrong Answer (Rojo) */
-    --status-tle: #FFC107;
-    /* Time Limit Exceeded (Amarillo) */
-    --status-pending: #17A2B8;
-    /* Validating (Azul cian) */
+    /* ── Bordes ── */
+    --tecnm-border: rgba(255, 255, 255, 0.08);
 
-    /* Sombras y Radios Modernos */
-    --shadow-sm: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-    --shadow-md: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-    --shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    /* ── Tipografía ── */
+    --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+    --font-display: 'Space Grotesk', var(--font-sans);
+    --font-mono: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+
+    /* ── Alturas fijas ── */
+    --navbar-h: 70px;
+
+    /* ── Estados Semánticos (Juez) ── */
+    --status-ac: #22c55e;
+    --status-wa: #ef4444;
+    --status-tle: #f59e0b;
+    --status-re: #ef4444;
+    --status-pending: #38bdf8;
+    --gob-guinda: #9d2449;
+
+    /* ── Sombras ── */
+    --shadow-sm: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
+    --shadow-md: 0 10px 25px -5px rgba(0, 0, 0, 0.35);
+    --shadow-lg: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+
+    /* ── Radios ── */
+    --radius-sm: 6px;
     --radius-md: 10px;
     --radius-lg: 16px;
+    --radius-xl: 24px;
+
+    /* ── Cristal ── */
     --glass-bg: rgba(255, 255, 255, 0.03);
     --glass-border: rgba(255, 255, 255, 0.08);
 }
@@ -37,17 +58,28 @@
     box-sizing: border-box;
     margin: 0;
     padding: 0;
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-family: var(--font-sans);
 }
 
 body {
-    background-color: var(--tecnm-gray-bg);
-    color: var(--tecnm-text-main);
+    background-color: var(--tecnm-dark);
+    color: var(--tecnm-text);
     line-height: 1.6;
     min-height: 100vh;
     display: flex;
     flex-direction: column;
 }
+
+/* Modo Arena: sin footer, sin navbar, pantalla completa */
+body.arena-mode .footer-tecnm,
+body.arena-mode .navbar {
+    display: none !important;
+}
+
+body.arena-mode {
+    overflow: hidden;
+}
+
 
 /* UTILIDADES Y COMPONENTES GLOBALES */
 .btn {
@@ -180,6 +212,114 @@ table.scoreboard-table td {
     box-shadow: 0 0 0 3px rgba(214, 161, 51, 0.2);
 }
 
+/* --- Premium Inputs & Timestamps --- */
+.field-group-premium {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.coach-label-premium {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--tecnm-text-muted);
+    letter-spacing: 0.5px;
+    margin-bottom: 0.2rem;
+}
+
+.coach-input-premium {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: var(--radius-md);
+    padding: 0.8rem 1rem;
+    color: var(--tecnm-text);
+    font-size: 1rem;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    width: 100%;
+}
+
+.coach-input-premium:focus {
+    outline: none;
+    background: rgba(255, 255, 255, 0.05);
+    border-color: var(--tecnm-blue);
+    box-shadow: 0 0 0 4px rgba(27, 54, 93, 0.2);
+}
+
+.field-hint-premium {
+    font-size: 0.75rem;
+    color: var(--tecnm-text-muted);
+    opacity: 0.6;
+}
+
+.timestamp-group-premium {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    position: relative;
+}
+
+.timestamp-header-premium {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.type-badge-premium {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 2px 10px;
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--tecnm-gold);
+}
+
+.timestamp-body-premium {
+    padding-left: 1.5rem;
+    border-left: 2px dashed rgba(255, 255, 255, 0.15);
+    margin-left: 0.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+.time-sub-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.time-label {
+    font-size: 0.75rem;
+    color: var(--tecnm-text-muted);
+    font-weight: 500;
+}
+
+.input-with-icon {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.input-with-icon i {
+    position: absolute;
+    left: 1rem;
+    color: var(--tecnm-text-muted);
+    pointer-events: none;
+    font-size: 0.9rem;
+}
+
+.input-with-icon .coach-input-premium {
+    padding-left: 2.75rem;
+}
+
+.coach-input-premium::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+    opacity: 0.5;
+    cursor: pointer;
+}
+
+
 /* ESTRUCTURA PRINCIPAL DEL APP ROOT */
 #app-root {
     flex: 1;
@@ -259,6 +399,69 @@ table.scoreboard-table td {
     align-items: center;
     justify-content: center;
     padding: 2rem;
+    background: radial-gradient(circle at 10% 20%, rgba(27, 54, 93, 0.4) 0%, transparent 40%),
+        radial-gradient(circle at 90% 80%, rgba(214, 161, 51, 0.1) 0%, transparent 40%),
+        var(--tecnm-dark);
+}
+
+.login-card {
+    background: var(--glass-bg);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-lg);
+    padding: 3rem 2.5rem;
+    width: 100%;
+    max-width: 450px;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes slideUpFade {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.login-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 35px 60px -15px rgba(0, 0, 0, 0.6);
+}
+
+.login-card-icon {
+    width: 64px;
+    height: 64px;
+    background: rgba(214, 161, 51, 0.1);
+    border: 1px solid rgba(214, 161, 51, 0.3);
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 1.5rem;
+    font-size: 1.5rem;
+    color: var(--tecnm-gold);
+}
+
+.login-card-title {
+    text-align: center;
+    font-size: 1.75rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+    color: white;
+}
+
+.login-card-sub {
+    text-align: center;
+    font-size: 0.9rem;
+    color: var(--tecnm-text-muted);
+    margin-bottom: 2rem;
+    line-height: 1.5;
 }
 
 /* SPLIT PANE PARA LA ARENA */

@@ -52,18 +52,57 @@ export const DashboardProfesorView = () => {
             <section id="ptab-mis-eventos" class="ctab-content">
                 <div class="coach-card coach-card--full" style="margin-bottom:1.5rem;" id="form-crear-evento-wrapper" style="display:none;">
                     <h3 class="coach-card-title"><i class="fa-solid fa-calendar-plus"></i> Crear Nuevo Evento</h3>
-                    <div style="display:grid; grid-template-columns: 2fr 1fr 1fr; gap:1rem; margin-top:1rem;">
-                        <div>
-                            <label class="coach-label">Nombre del Concurso *</label>
-                            <input type="text" id="ce-titulo" class="coach-input" placeholder="Ej: Gran Premio de México 2026">
+                    <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:2rem; margin-top:1.5rem;">
+                        <div class="field-group-premium">
+                            <label class="coach-label-premium">Nombre del Concurso</label>
+                            <input type="text" id="ce-titulo" class="coach-input-premium" placeholder="Ej: Gran Premio de México 2026">
+                            <div class="field-hint-premium">Usa un nombre descriptivo para identificar el evento.</div>
                         </div>
-                        <div>
-                            <label class="coach-label">Inicio (Local) *</label>
-                            <input type="datetime-local" id="ce-inicio" class="coach-input">
+
+                        <div class="timestamp-group-premium">
+                            <div class="timestamp-header-premium">
+                                <label class="coach-label-premium">Inicio del Concurso</label>
+                                <span class="type-badge-premium">timestamp</span>
+                            </div>
+                            <div class="timestamp-body-premium">
+                                <div class="time-sub-group">
+                                    <label class="time-label">Fecha</label>
+                                    <div class="input-with-icon">
+                                        <i class="fa-regular fa-calendar"></i>
+                                        <input type="date" id="ce-inicio-fecha" class="coach-input-premium">
+                                    </div>
+                                </div>
+                                <div class="time-sub-group">
+                                    <label class="time-label">Hora</label>
+                                    <div class="input-with-icon">
+                                        <i class="fa-regular fa-clock"></i>
+                                        <input type="time" id="ce-inicio-hora" class="coach-input-premium">
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        <div>
-                            <label class="coach-label">Cierre (Local) *</label>
-                            <input type="datetime-local" id="ce-fin" class="coach-input">
+
+                        <div class="timestamp-group-premium">
+                            <div class="timestamp-header-premium">
+                                <label class="coach-label-premium">Fin del Concurso</label>
+                                <span class="type-badge-premium">timestamp</span>
+                            </div>
+                            <div class="timestamp-body-premium">
+                                <div class="time-sub-group">
+                                    <label class="time-label">Fecha</label>
+                                    <div class="input-with-icon">
+                                        <i class="fa-regular fa-calendar"></i>
+                                        <input type="date" id="ce-fin-fecha" class="coach-input-premium">
+                                    </div>
+                                </div>
+                                <div class="time-sub-group">
+                                    <label class="time-label">Hora</label>
+                                    <div class="input-with-icon">
+                                        <i class="fa-regular fa-clock"></i>
+                                        <input type="time" id="ce-fin-hora" class="coach-input-premium">
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                     <div style="display:flex; justify-content:flex-end; gap:1rem; margin-top:1.5rem;">
@@ -227,16 +266,23 @@ function bindProfesorEvents() {
 
     document.getElementById('btn-guardar-evento').addEventListener('click', async () => {
         const titulo = document.getElementById('ce-titulo').value.trim();
-        const inicio = document.getElementById('ce-inicio').value;
-        const fin = document.getElementById('ce-fin').value;
+        const inicioF = document.getElementById('ce-inicio-fecha').value;
+        const inicioH = document.getElementById('ce-inicio-hora').value;
+        const finF = document.getElementById('ce-fin-fecha').value;
+        const finH = document.getElementById('ce-fin-hora').value;
 
-        if (!titulo || !inicio || !fin) {
-            UIModal.alert('Campos Obligatorios', 'Ingresa el Nombre, la Fecha de Apertura y la de Cierre.');
+        if (!titulo || !inicioF || !inicioH || !finF || !finH) {
+            UIModal.alert('Campos Obligatorios', 'Por favor completa todos los campos de nombre, fecha y hora.');
             return;
         }
 
-        const msInicio = new Date(inicio).getTime();
-        const msFin = new Date(fin).getTime();
+        const msInicio = new Date(`${inicioF}T${inicioH}`).getTime();
+        const msFin = new Date(`${finF}T${finH}`).getTime();
+
+        if (isNaN(msInicio) || isNaN(msFin)) {
+            UIModal.alert('Formato Inválido', 'Asegúrate de que las fechas y horas sean válidas.');
+            return;
+        }
 
         if (msFin <= msInicio) {
             UIModal.alert('Fechas Inválidas', 'La fecha de cierre debe ser posterior a la de apertura.');
@@ -251,9 +297,9 @@ function bindProfesorEvents() {
         await AuthState.db.saveConcurso({
             id,
             titulo,
-            estado: 'programado', // 'programado', 'activo', 'finalizado'
-            fecha_inicio: inicio,
-            fecha_fin: fin,
+            estado: 'programado',
+            fecha_inicio: new Date(msInicio).toISOString(),
+            fecha_fin: new Date(msFin).toISOString(),
             ts_inicio: msInicio,
             ts_fin: msFin,
             problemas: [],
@@ -272,8 +318,10 @@ function bindProfesorEvents() {
 
 function limpiarFormEvento() {
     document.getElementById('ce-titulo').value = '';
-    document.getElementById('ce-inicio').value = '';
-    document.getElementById('ce-fin').value = '';
+    document.getElementById('ce-inicio-fecha').value = '';
+    document.getElementById('ce-inicio-hora').value = '';
+    document.getElementById('ce-fin-fecha').value = '';
+    document.getElementById('ce-fin-hora').value = '';
 }
 
 function renderProfesorTab(tabId) {
@@ -484,15 +532,61 @@ async function renderAdminJuezDetalles() {
     document.getElementById('admin-juez-estado').className = `estado-badge estado-${c.estado}`;
     document.getElementById('admin-juez-estado').textContent = c.estado.toUpperCase();
 
+    // Timestamps Premium en Vista Admin
+    const fi = new Date(c.fecha_inicio);
+    const ff = new Date(c.fecha_fin);
+
+    const timeInfoHTML = `
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:1.5rem; margin-top:1.5rem;">
+            <div class="timestamp-group-premium">
+                <div class="timestamp-header-premium">
+                    <label class="coach-label-premium">Inicio</label>
+                    <span class="type-badge-premium">config</span>
+                </div>
+                <div class="timestamp-body-premium">
+                    <div class="time-sub-group">
+                        <div style="font-size:1rem; font-weight:700; color:white;">${fi.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
+                        <div style="font-size:0.9rem; color:var(--tecnm-gold); font-family:var(--font-mono);">${fi.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}</div>
+                    </div>
+                </div>
+            </div>
+            <div class="timestamp-group-premium">
+                <div class="timestamp-header-premium">
+                    <label class="coach-label-premium">Termino</label>
+                    <span class="type-badge-premium">config</span>
+                </div>
+                <div class="timestamp-body-premium">
+                    <div class="time-sub-group">
+                        <div style="font-size:1rem; font-weight:700; color:white;">${ff.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
+                        <div style="font-size:0.9rem; color:var(--tecnm-gold); font-family:var(--font-mono);">${ff.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
     // Acciones de Evento (Forzar manual)
     const ax = document.getElementById('admin-juez-acciones');
     if (c.estado !== 'activo' && c.estado !== 'finalizado') {
-        ax.innerHTML = `<button class="btn btn-accent" onclick="window._activarEventoAdmin()"><i class="fa-solid fa-play"></i> Iniciar Evento Manulamente</button>
-                        <p style="font-size:0.75rem; color:#888; margin-top:5px;">El evento se activará solo al llegar la hora, pero puedes forzarlo aquí.</p>`;
+        ax.innerHTML = `
+            ${timeInfoHTML}
+            <div style="margin-top:2rem;">
+                <button class="btn btn-accent" style="width:100%;" onclick="window._activarEventoAdmin()"><i class="fa-solid fa-play"></i> Forzar Inicio de Evento</button>
+                <p style="font-size:0.75rem; color:#888; margin-top:8px; text-align:center;">El disparo automático ocurrirá al llegar la fecha configurada.</p>
+            </div>`;
     } else if (c.estado === 'activo') {
-        ax.innerHTML = `<button class="btn btn-danger" style="background:#dc3545; color:white;" onclick="window._finalizarEventoAdmin()"><i class="fa-solid fa-stop"></i> Finalizar Evento</button>`;
+        ax.innerHTML = `
+            ${timeInfoHTML}
+            <div style="margin-top:2rem;">
+                <button class="btn btn-danger" style="background:#dc3545; color:white; width:100%;" onclick="window._finalizarEventoAdmin()"><i class="fa-solid fa-stop"></i> Finalizar Evento Inmediatamente</button>
+            </div>`;
     } else {
-        ax.innerHTML = `<span>Este evento ya ha finalizado.</span>`;
+        ax.innerHTML = `
+            ${timeInfoHTML}
+            <div style="margin-top:2rem; text-align:center; opacity:0.6;">
+                <i class="fa-solid fa-check-circle fa-2x" style="color:var(--tecnm-gold); margin-bottom:0.5rem;"></i>
+                <div style="font-weight:600;">Evento Finalizado</div>
+            </div>`;
     }
 
     // Lista de Problemas Locales
