@@ -1311,3 +1311,144 @@
 .arena-root ::-webkit-scrollbar-thumb:hover {
     background: rgba(255, 255, 255, 0.2);
 }
+
+/* ── Clarificaciones ──────────────────────────────────────── */
+.arena-clarif-wrap {
+    padding: .75rem;
+    overflow-y: auto;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+}
+
+.arena-clarif-form {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 10px;
+    padding: 1rem;
+}
+
+.arena-clarif-title {
+    color: var(--tecnm-gold);
+    font-size: .85rem;
+    font-weight: 700;
+    margin: 0 0 .65rem;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+}
+
+.arena-clarif-textarea {
+    width: 100%;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    color: white;
+    font-family: var(--font-display, 'Inter', sans-serif);
+    font-size: .85rem;
+    padding: .65rem;
+    resize: vertical;
+    min-height: 75px;
+    outline: none;
+    transition: border-color .2s;
+}
+
+.arena-clarif-textarea:focus {
+    border-color: var(--tecnm-blue);
+}
+
+.arena-clarif-history {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
+    padding: .75rem 1rem;
+}
+
+.clarif-item {
+    padding: .65rem .75rem;
+    border-radius: 8px;
+    margin-bottom: .5rem;
+    font-size: .82rem;
+    border-left: 3px solid;
+}
+
+.clarif-pendiente {
+    border-color: var(--tecnm-gold);
+    background: rgba(245, 158, 11, 0.06);
+}
+
+.clarif-respondida {
+    border-color: var(--status-ac);
+    background: rgba(34, 197, 94, 0.06);
+}
+
+.clarif-pregunta {
+    color: rgba(255, 255, 255, .8);
+    margin-bottom: .3rem;
+}
+
+.clarif-respuesta {
+    color: rgba(255, 255, 255, .65);
+}
+
+.clarif-ts {
+    color: rgba(255, 255, 255, .3);
+    font-size: .75rem;
+    margin-top: .2rem;
+}
+
+/* Notification dot */
+.arena-notif-dot {
+    display: inline-block;
+    background: #ef4444;
+    color: white;
+    font-size: .65rem;
+    font-weight: 700;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    text-align: center;
+    line-height: 16px;
+    margin-left: 4px;
+    animation: pulse 1.4s ease infinite;
+}
+
+/* Toast anuncios */
+#arena-anuncios-container {
+    position: fixed;
+    top: 72px;
+    right: 1rem;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+    pointer-events: none;
+}
+
+.arena-toast {
+    pointer-events: all;
+}
+
+@keyframes slideInRight {
+    from {
+        opacity: 0;
+        transform: translateX(40px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes pulse {
+
+    0%,
+    100% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(1.2);
+    }
+}

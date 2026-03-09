@@ -88,7 +88,7 @@ export const ArenaView = () => {
         <!-- ═══ MAIN SPLIT LAYOUT ═══ -->
         <div class="arena-split">
 
-            <!-- Panel Izquierdo: Problema + Scoreboard -->
+            <!-- Panel Izquierdo: Problema + Ranking + Clarificaciones -->
             <aside class="arena-left">
                 <nav class="arena-left-tabs">
                     <button class="arena-tab active" data-apanel="ap-problema">
@@ -96,6 +96,10 @@ export const ArenaView = () => {
                     </button>
                     <button class="arena-tab" data-apanel="ap-ranking">
                         <i class="fa-solid fa-ranking-star"></i> Ranking
+                    </button>
+                    <button class="arena-tab" data-apanel="ap-clarif" id="arena-tab-clarif">
+                        <i class="fa-solid fa-comment-dots"></i> Clarif.
+                        <span id="arena-clarif-badge" class="arena-notif-dot" style="display:none;">!</span>
                     </button>
                 </nav>
 
@@ -110,6 +114,27 @@ export const ArenaView = () => {
 
                 <div id="ap-ranking" class="arena-tab-content" style="display:none;">
                     <div id="arena-scoreboard" class="arena-scoreboard-wrap"></div>
+                </div>
+
+                <div id="ap-clarif" class="arena-tab-content arena-clarif-wrap" style="display:none;">
+                    <div class="arena-clarif-form">
+                        <h4 class="arena-clarif-title"><i class="fa-solid fa-comment-question"></i> Nueva Clarificaci&#243;n</h4>
+                        <select id="clarif-problema-sel" class="arena-lang-sel" style="width:100%;margin-bottom:.6rem;">
+                            <option value="">&#8212; General (sin problema espec&#237;fico) &#8212;</option>
+                        </select>
+                        <textarea id="clarif-pregunta" class="arena-clarif-textarea" rows="3" placeholder="Describe tu duda sobre el enunciado..."></textarea>
+                        <button class="arena-btn arena-btn--submit" id="btn-enviar-clarif" style="width:100%;margin-top:.6rem;">
+                            <i class="fa-solid fa-paper-plane"></i> Enviar
+                        </button>
+                    </div>
+                    <div class="arena-clarif-history">
+                        <h4 class="arena-clarif-title" style="margin-top:1rem;"><i class="fa-solid fa-list-check"></i> Mis Preguntas</h4>
+                        <div id="arena-clarif-list"><p style="opacity:.4;font-size:.85rem;">No has enviado preguntas.</p></div>
+                    </div>
+                    <div class="arena-clarif-history">
+                        <h4 class="arena-clarif-title" style="margin-top:1rem;"><i class="fa-solid fa-bullhorn"></i> Clarificaciones P&#250;blicas</h4>
+                        <div id="arena-clarif-public"><p style="opacity:.4;font-size:.85rem;">Sin clarificaciones p&#250;blicas a&#250;n.</p></div>
+                    </div>
                 </div>
             </aside>
 
@@ -188,18 +213,30 @@ async function initArena() {
     document.getElementById('arena-team-name').textContent =
         AuthState.user.team || AuthState.user.email;
 
-    // Cargar problems
-    const todosProb = AuthState.db.getProblemas();
-    const problemas = (concurso.problemas || []).map(id => todosProb.find(p => p.id === id)).filter(Boolean);
+    // ── Cargar problemas desde Supabase (async) ──────────────────────
+    const todosProb = await AuthState.db.getProblemas();
+    const problemas = (concurso.problemas || [])
+        .map(id => todosProb.find(p => p.id === id))
+        .filter(Boolean);
 
     renderProbPills(problemas);
-
     if (problemas.length) {
         seleccionarProblema(problemas[0]);
         document.getElementById('btn-arena-enviar').disabled = false;
     }
 
-    // Cronómetro
+    // ── Populate selector de clarificaciones ─────────────────────────
+    const clarifSel = document.getElementById('clarif-problema-sel');
+    if (clarifSel) {
+        problemas.forEach((p, i) => {
+            const opt = document.createElement('option');
+            opt.value = p.id;
+            opt.textContent = `${String.fromCharCode(65 + i)}. ${p.titulo}`;
+            clarifSel.appendChild(opt);
+        });
+    }
+
+    // ── Cronómetro ───────────────────────────────────────────────────
     if (concurso.ts_fin) {
         concursoEndTime = new Date(concurso.ts_fin).getTime();
         actualizarTimer();
@@ -207,10 +244,12 @@ async function initArena() {
         arenaTimer = setInterval(actualizarTimer, 1000);
     }
 
-    // Realtime Scoreboard
+    // ── Suscripciones Realtime ────────────────────────────────────────
     subscribeToScoreboard(concurso.id);
+    subscribeToAnuncios(concurso.id);
+    subscribeToClarificaciones(concurso.id);
 
-    // Tabs
+    // ── Tabs ─────────────────────────────────────────────────────────
     document.querySelectorAll('.arena-tab').forEach(btn => {
         btn.addEventListener('click', () => {
             document.querySelectorAll('.arena-tab').forEach(b => b.classList.remove('active'));
@@ -219,14 +258,194 @@ async function initArena() {
             const target = document.getElementById(btn.dataset.apanel);
             if (target) target.style.display = 'block';
             if (btn.dataset.apanel === 'ap-ranking') renderArenaScoreboardById(concurso.id);
+            if (btn.dataset.apanel === 'ap-clarif') {
+                // Quitar badge de notificación al abrir
+                const badge = document.getElementById('arena-clarif-badge');
+                if (badge) badge.style.display = 'none';
+                cargarMisClarificaciones(concurso.id);
+            }
         });
     });
+
+    // ── Evento: enviar clarificación ──────────────────────────────────
+    document.getElementById('btn-enviar-clarif').addEventListener('click', () => enviarClarificacion(concurso.id));
 
     document.getElementById('btn-arena-probar').addEventListener('click', () => probarCodigo(false));
     document.getElementById('btn-arena-enviar').addEventListener('click', () => probarCodigo(true));
     document.getElementById('arena-code').addEventListener('input', updateLineNums);
     updateLineNums();
+
+    // ── Cargar clarificaciones públicas iniciales ─────────────────────
+    cargarClarificacionesPublicas(concurso.id);
 }
+
+// ── Clarificaciones ───────────────────────────────────────────────────────
+
+async function enviarClarificacion(concursoId) {
+    const pregunta = document.getElementById('clarif-pregunta').value.trim();
+    const probId = document.getElementById('clarif-problema-sel')?.value || null;
+    const btn = document.getElementById('btn-enviar-clarif');
+
+    if (!pregunta) { UIModal.alert('Campo vacío', 'Escribe tu pregunta antes de enviar.'); return; }
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+
+    const { error } = await supabase.from('icpc_clarificaciones').insert({
+        concurso_id: concursoId,
+        problema_id: probId || null,
+        equipo_nombre: AuthState.user.team || AuthState.user.email,
+        pregunta
+    });
+
+    if (error) {
+        UIModal.alert('Error', 'No se pudo enviar la clarificación.');
+    } else {
+        document.getElementById('clarif-pregunta').value = '';
+        await cargarMisClarificaciones(concursoId);
+        UIModal.alert('✅ Enviada', 'Tu clarificación fue enviada al Juez. Revisa aquí la respuesta.');
+    }
+
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Enviar';
+}
+
+async function cargarMisClarificaciones(concursoId) {
+    const listEl = document.getElementById('arena-clarif-list');
+    if (!listEl) return;
+
+    const equipo = AuthState.user.team || AuthState.user.email;
+    const { data, error } = await supabase
+        .from('icpc_clarificaciones')
+        .select('*')
+        .eq('concurso_id', concursoId)
+        .eq('equipo_nombre', equipo)
+        .order('ts_pregunta', { ascending: false });
+
+    if (error || !data?.length) {
+        listEl.innerHTML = '<p style="opacity:.4;font-size:.85rem;">No has enviado preguntas aún.</p>';
+        return;
+    }
+
+    listEl.innerHTML = data.map(c => `
+        <div class="clarif-item ${c.respuesta ? 'clarif-respondida' : 'clarif-pendiente'}">
+            <div class="clarif-pregunta"><i class="fa-solid fa-circle-question"></i> ${c.pregunta}</div>
+            <div class="clarif-respuesta">
+                ${c.respuesta
+            ? `<i class="fa-solid fa-circle-check" style="color:var(--status-ac);"></i> <strong>Juez:</strong> ${c.respuesta}`
+            : `<i class="fa-solid fa-clock" style="color:var(--tecnm-gold);"></i> <em>Pendiente de respuesta...</em>`}
+            </div>
+            <div class="clarif-ts">${new Date(c.ts_pregunta).toLocaleTimeString('es-MX')}</div>
+        </div>`).join('');
+}
+
+async function cargarClarificacionesPublicas(concursoId) {
+    const pubEl = document.getElementById('arena-clarif-public');
+    if (!pubEl) return;
+
+    const { data } = await supabase
+        .from('icpc_clarificaciones')
+        .select('*')
+        .eq('concurso_id', concursoId)
+        .eq('visible_todos', true)
+        .order('ts_respuesta', { ascending: false });
+
+    if (!data?.length) {
+        pubEl.innerHTML = '<p style="opacity:.4;font-size:.85rem;">Sin clarificaciones públicas aún.</p>';
+        return;
+    }
+
+    pubEl.innerHTML = data.map(c => `
+        <div class="clarif-item clarif-respondida">
+            <div class="clarif-pregunta"><i class="fa-solid fa-users"></i> ${c.pregunta}</div>
+            <div class="clarif-respuesta"><i class="fa-solid fa-circle-check" style="color:var(--status-ac);"></i> <strong>Juez:</strong> ${c.respuesta}</div>
+        </div>`).join('');
+}
+
+// ── Anuncios Realtime (Broadcast del Juez) ────────────────────────────────
+
+function subscribeToAnuncios(concursoId) {
+    supabase.channel(`anuncios_${concursoId}`)
+        .on('postgres_changes', {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'icpc_anuncios',
+            filter: `concurso_id=eq.${concursoId}`
+        }, payload => {
+            mostrarToastAnuncio(payload.new);
+        })
+        .subscribe();
+}
+
+function mostrarToastAnuncio(anuncio) {
+    const container = document.getElementById('arena-anuncios-container');
+    if (!container) return;
+
+    const colorMap = { info: '#3b82f6', warning: '#f59e0b', critico: '#ef4444', problema_corregido: '#22c55e' };
+    const iconMap = { info: 'fa-circle-info', warning: 'fa-triangle-exclamation', critico: 'fa-siren-on', problema_corregido: 'fa-wrench' };
+    const color = colorMap[anuncio.tipo] || '#3b82f6';
+    const icon = iconMap[anuncio.tipo] || 'fa-circle-info';
+
+    const toast = document.createElement('div');
+    toast.className = 'arena-toast';
+    toast.style.cssText = `
+        background: rgba(20,20,35,0.95);
+        border-left: 4px solid ${color};
+        border-radius: 8px;
+        padding: .85rem 1.1rem;
+        min-width: 280px; max-width: 380px;
+        box-shadow: 0 8px 30px rgba(0,0,0,.6);
+        pointer-events: all;
+        animation: slideInRight .3s ease;
+        font-family: var(--font-display,'Inter',sans-serif);
+    `;
+    toast.innerHTML = `
+        <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.3rem;">
+            <i class="fa-solid ${icon}" style="color:${color};font-size:1rem;"></i>
+            <strong style="color:white;font-size:.9rem;">${anuncio.titulo || 'Anuncio del Juez'}</strong>
+        </div>
+        <p style="color:rgba(255,255,255,.75);font-size:.83rem;margin:0;">${anuncio.mensaje}</p>
+        <div style="text-align:right;margin-top:.4rem;">
+            <small style="color:rgba(255,255,255,.3);font-size:.75rem;">${new Date().toLocaleTimeString('es-MX')}</small>
+        </div>`;
+    container.appendChild(toast);
+
+    // Auto-dismiss a los 12 segundos (crítico: 30s)
+    const delay = anuncio.tipo === 'critico' ? 30000 : 12000;
+    setTimeout(() => toast.remove(), delay);
+}
+
+// ── Suscripción a Clarificaciones Públicas en tiempo real ─────────────────
+
+function subscribeToClarificaciones(concursoId) {
+    supabase.channel(`clarif_public_${concursoId}`)
+        .on('postgres_changes', {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'icpc_clarificaciones',
+            filter: `concurso_id=eq.${concursoId}`
+        }, payload => {
+            const updated = payload.new;
+            // Notificar si se respondió una pregunta del equipo
+            const equipo = AuthState.user.team || AuthState.user.email;
+            if (updated.equipo_nombre === equipo && updated.respuesta) {
+                const badge = document.getElementById('arena-clarif-badge');
+                if (badge) badge.style.display = 'inline';
+                mostrarToastAnuncio({
+                    tipo: 'info',
+                    titulo: '✉️ Respuesta a tu Clarificación',
+                    mensaje: `Juez: ${updated.respuesta}`
+                });
+                // Refrescar lista si está visible
+                const tab = document.getElementById('ap-clarif');
+                if (tab && tab.style.display !== 'none') cargarMisClarificaciones(concursoId);
+            }
+            // Si es pública, refrescar sección de públicas
+            if (updated.visible_todos) cargarClarificacionesPublicas(concursoId);
+        })
+        .subscribe();
+}
+
 
 function renderProbPills(problemas) {
     const pills = document.getElementById('arena-prob-pills');

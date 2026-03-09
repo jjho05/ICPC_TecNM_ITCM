@@ -577,10 +577,108 @@ async function renderAdminJuezDetalles() {
     } else if (c.estado === 'activo') {
         ax.innerHTML = `
             ${timeInfoHTML}
-            <div style="margin-top:2rem;">
-                <button class="btn btn-danger" style="background:#dc3545; color:white; width:100%;" onclick="window._finalizarEventoAdmin()"><i class="fa-solid fa-stop"></i> Finalizar Evento Inmediatamente</button>
+            <div style="margin-top:2rem; display:flex; flex-direction:column; gap:.75rem;">
+                <button class="btn btn-danger" style="background:#dc3545; color:white; width:100%;" onclick="window._finalizarEventoAdmin()">
+                    <i class="fa-solid fa-stop"></i> Finalizar Evento
+                </button>
+
+                <!-- Anunciar al concurso -->
+                <div class="coach-card" style="margin:0;border-left:4px solid var(--tecnm-gold);">
+                    <h4 style="color:var(--tecnm-gold);font-size:.85rem;margin:0 0 .6rem;"><i class="fa-solid fa-bullhorn"></i> Enviar Anuncio</h4>
+                    <input id="announce-titulo" class="coach-input" placeholder="T&#237;tulo del anuncio" style="width:100%;margin-bottom:.4rem;">
+                    <textarea id="announce-msg" class="coach-input" rows="2" placeholder="Mensaje a todos los equipos..." style="width:100%;resize:vertical;"></textarea>
+                    <select id="announce-tipo" class="coach-input" style="width:100%;margin:.4rem 0;">
+                        <option value="info">&#8505; Informativo</option>
+                        <option value="warning">&#9888; Advertencia</option>
+                        <option value="critico">&#128680; CR&#205;TICO</option>
+                        <option value="problema_corregido">&#128295; Correcci&#243;n de Enunciado</option>
+                    </select>
+                    <button class="btn btn-accent" style="width:100%;" onclick="window._enviarAnuncioJuez('${c.id}')">
+                        <i class="fa-solid fa-paper-plane"></i> Enviar Anuncio
+                    </button>
+                </div>
+
+                <!-- Panel de Clarificaciones -->
+                <div class="coach-card" style="margin:0;border-left:4px solid var(--tecnm-blue);">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.6rem;">
+                        <h4 style="color:var(--tecnm-blue);font-size:.85rem;margin:0;"><i class="fa-solid fa-comment-dots"></i> Clarificaciones <span id="juez-clarif-count" class="arena-notif-dot" style="display:none;">0</span></h4>
+                        <button class="btn-tbl" onclick="window._cargarClarifJuez('${c.id}')"><i class="fa-solid fa-rotate"></i></button>
+                    </div>
+                    <div id="juez-clarif-list" style="max-height:250px;overflow-y:auto;"><p style="opacity:.4;font-size:.83rem;">Cargando...</p></div>
+                </div>
             </div>`;
-    } else {
+
+        // Cargar clarificaciones al renderizar
+        window._cargarClarifJuez = async (cid) => {
+            const { data } = await supabase
+                .from('icpc_clarificaciones')
+                .select('*')
+                .eq('concurso_id', cid)
+                .order('ts_pregunta', { ascending: false });
+
+            const el = document.getElementById('juez-clarif-list');
+            const badge = document.getElementById('juez-clarif-count');
+            if (!el) return;
+
+            const pendientes = (data || []).filter(c => !c.respuesta);
+            if (badge) { badge.textContent = pendientes.length; badge.style.display = pendientes.length ? 'inline' : 'none'; }
+
+            if (!data?.length) { el.innerHTML = '<p style="opacity:.4;font-size:.83rem;">Sin preguntas a&#250;n.</p>'; return; }
+
+            el.innerHTML = data.map(q => `
+                <div style="border-left:3px solid ${q.respuesta ? 'var(--status-ac)' : 'var(--tecnm-gold)'};padding:.5rem .75rem;margin-bottom:.5rem;background:rgba(255,255,255,0.03);border-radius:4px;">
+                    <div style="font-size:.8rem;font-weight:700;color:rgba(255,255,255,.7);">&#128101; ${q.equipo_nombre} ${q.problema_id ? `<span style="color:var(--tecnm-gold);">(${q.problema_id})</span>` : ''}</div>
+                    <div style="font-size:.82rem;color:white;margin:.2rem 0;">${q.pregunta}</div>
+                    ${q.respuesta
+                    ? `<div style="font-size:.8rem;color:var(--status-ac);"><i class="fa-solid fa-check"></i> ${q.respuesta}</div>`
+                    : `<div style="display:flex;gap:.35rem;margin-top:.35rem;">
+                            <input id="resp-${q.id}" class="coach-input" placeholder="Respuesta del juez..." style="flex:1;font-size:.8rem;padding:.3rem .5rem;">
+                            <button class="btn btn-accent" style="padding:.25rem .6rem;font-size:.78rem;" onclick="window._responderClarif('${q.id}', '${cid}')">OK</button>
+                            <label style="display:flex;align-items:center;gap:.3rem;font-size:.75rem;color:rgba(255,255,255,.5);cursor:pointer;">
+                                <input type="checkbox" id="public-${q.id}"> P&#250;blica
+                            </label>
+                        </div>`}
+                </div>`).join('');
+        };
+
+        window._responderClarif = async (clarifId, concursoId) => {
+            const respuesta = document.getElementById(`resp-${clarifId}`)?.value?.trim();
+            const esPublica = document.getElementById(`public-${clarifId}`)?.checked;
+            if (!respuesta) return;
+            await supabase.from('icpc_clarificaciones').update({
+                respuesta,
+                visible_todos: esPublica || false,
+                respondido_por: AuthState.user.email,
+                ts_respuesta: new Date().toISOString()
+            }).eq('id', clarifId);
+            window._cargarClarifJuez(concursoId);
+        };
+
+        window._enviarAnuncioJuez = async (concursoId) => {
+            const titulo = document.getElementById('announce-titulo')?.value?.trim();
+            const mensaje = document.getElementById('announce-msg')?.value?.trim();
+            const tipo = document.getElementById('announce-tipo')?.value || 'info';
+            if (!titulo || !mensaje) { UIModal.alert('Campos vacios', 'Completa titulo y mensaje.'); return; }
+            const { error } = await supabase.from('icpc_anuncios').insert({
+                concurso_id: concursoId,
+                juez_email: AuthState.user.email,
+                titulo, mensaje, tipo
+            });
+            if (!error) {
+                document.getElementById('announce-titulo').value = '';
+                document.getElementById('announce-msg').value = '';
+                UIModal.alert('&#10003; Enviado', 'Anuncio transmitido a todos los equipos en tiempo real.');
+            }
+        };
+
+        // Suscripción Realtime para notificar al Juez de nuevas preguntas
+        supabase.channel(`juez_clarif_${c.id}`)
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'icpc_clarificaciones', filter: `concurso_id=eq.${c.id}` }, () => {
+                window._cargarClarifJuez(c.id);
+            }).subscribe();
+
+        window._cargarClarifJuez(c.id);
+
         ax.innerHTML = `
             ${timeInfoHTML}
             <div style="margin-top:2rem; text-align:center; opacity:0.6;">
@@ -589,9 +687,9 @@ async function renderAdminJuezDetalles() {
             </div>`;
     }
 
-    // Lista de Problemas Locales
+    // Lista de Problemas
     const list = document.getElementById('admin-juez-problemas-list');
-    const todosProbs = AuthState.db.getProblemas();
+    const todosProbs = await AuthState.db.getProblemas();
 
     if (!c.problemas || c.problemas.length === 0) {
         list.innerHTML = '<li style="opacity:0.6; padding:1rem; text-align:center;">No hay problemas asignados. Añade uno.</li>';
