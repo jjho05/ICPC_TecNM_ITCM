@@ -20,6 +20,11 @@ export const RegisterAdminView = () => {
                 err.textContent = 'Las contraseñas no coinciden.';
                 return;
             }
+            if (pass.length < 8) {
+                err.style.display = 'block';
+                err.textContent = 'La contraseña debe tener al menos 8 caracteres.';
+                return;
+            }
 
             btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Creando Perfil Admin...';
             btn.disabled = true;

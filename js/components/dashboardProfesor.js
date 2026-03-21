@@ -9,6 +9,13 @@ window._modalAlert = (title, desc) => UIModal.alert(title, desc);
 //  Roles Contextuales: Juez de Evento vs Coach de Equipos
 // ══════════════════════════════════════════════════════
 
+function escapeHTML(str) {
+    if (!str) return '';
+    return String(str).replace(/[&<>"']/g, function(m) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m];
+    });
+}
+
 export const DashboardProfesorView = () => {
 
     setTimeout(() => {
@@ -722,10 +729,10 @@ async function renderAdminJuezDetalles() {
 
             el.innerHTML = data.map(q => `
                 <div style="border-left:3px solid ${q.respuesta ? 'var(--status-ac)' : 'var(--tecnm-gold)'};padding:.5rem .75rem;margin-bottom:.5rem;background:rgba(255,255,255,0.03);border-radius:4px;">
-                    <div style="font-size:.8rem;font-weight:700;color:rgba(255,255,255,.7);">&#128101; ${q.equipo_nombre} ${q.problema_id ? `<span style="color:var(--tecnm-gold);">(${q.problema_id})</span>` : ''}</div>
-                    <div style="font-size:.82rem;color:white;margin:.2rem 0;">${q.pregunta}</div>
+                    <div style="font-size:.8rem;font-weight:700;color:rgba(255,255,255,.7);">&#128101; ${escapeHTML(q.equipo_nombre)} ${q.problema_id ? `<span style="color:var(--tecnm-gold);">(${escapeHTML(q.problema_id)})</span>` : ''}</div>
+                    <div style="font-size:.82rem;color:white;margin:.2rem 0;">${escapeHTML(q.pregunta)}</div>
                     ${q.respuesta
-                    ? `<div style="font-size:.8rem;color:var(--status-ac);"><i class="fa-solid fa-check"></i> ${q.respuesta}</div>`
+                    ? `<div style="font-size:.8rem;color:var(--status-ac);"><i class="fa-solid fa-check"></i> ${escapeHTML(q.respuesta)}</div>`
                     : `<div style="display:flex;gap:.35rem;margin-top:.35rem;">
                             <input id="resp-${q.id}" class="coach-input" placeholder="Respuesta del juez..." style="flex:1;font-size:.8rem;padding:.3rem .5rem;">
                             <button class="btn btn-accent" style="padding:.25rem .6rem;font-size:.78rem;" onclick="window._responderClarif('${q.id}', '${cid}')">OK</button>
@@ -767,7 +774,11 @@ async function renderAdminJuezDetalles() {
         };
 
         // Suscripción Realtime para notificar al Juez de nuevas preguntas
-        supabase.channel(`juez_clarif_${c.id}`)
+        // [V7 SEC/MEM_LEAK FIX] Limpiar canal anterior si el juez recarga la vista
+        if (window._juezClarifSub) {
+            supabase.removeChannel(window._juezClarifSub);
+        }
+        window._juezClarifSub = supabase.channel(`juez_clarif_${c.id}`)
             .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'icpc_clarificaciones', filter: `concurso_id=eq.${c.id}` }, () => {
                 window._cargarClarifJuez(c.id);
             }).subscribe();
@@ -866,6 +877,9 @@ async function renderAdminJuezDetalles() {
                     c.problemas.push(pExacto.id);
                     await AuthState.db.saveConcurso(c);
                     renderAdminJuezDetalles();
+                    UIToast.success('Problema añadido exitosamente.');
+                    return;
+                } else {
                     UIToast.warn('Ese problema ya está en el concurso.');
                     return;
                 }

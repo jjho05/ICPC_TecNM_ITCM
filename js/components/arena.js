@@ -9,6 +9,13 @@ import { UIToast } from './ui/toast.js';
 //  La Arena — Editor de código + Juez + Scoreboard
 // ══════════════════════════════════════════════════════
 
+function escapeHTML(str) {
+    if (!str) return '';
+    return String(str).replace(/[&<>"']/g, function(m) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m];
+    });
+}
+
 // ── Templates de código por lenguaje ─────────────────────────────────────
 const CODE_TEMPLATES = {
     cpp: `#include <bits/stdc++.h>
@@ -116,7 +123,7 @@ export const ArenaView = () => {
                     <i class="fa-solid fa-users"></i>
                     <span id="arena-team-name">—</span>
                 </span>
-                <button class="arena-exit-btn" onclick="window.router.navigate('/')">
+                <button class="arena-exit-btn" id="btn-arena-salir" title="Salir del concurso">
                     <i class="fa-solid fa-right-from-bracket"></i>
                 </button>
             </div>
@@ -416,6 +423,24 @@ async function initArena() {
     document.getElementById('btn-arena-enviar').addEventListener('click', () => probarCodigo(true));
     document.getElementById('arena-code').addEventListener('input', updateLineNums);
 
+    // ── Botón de salida con confirmación ─────────────────────────────
+    const btnSalir = document.getElementById('btn-arena-salir');
+    if (btnSalir) {
+        btnSalir.addEventListener('click', async () => {
+            const confirmar = await UIModal.confirm(
+                '⚠️ Salir del Concurso',
+                '¿Estás seguro que deseas abandonar el concurso? Esta acción quedará registrada.'
+            );
+            if (confirmar) {
+                window.registrarViolacion('salida_voluntaria', 'El alumno salió voluntariamente del concurso.', 'alta');
+                ConcursoSecurity.destroy();
+                document.body.classList.remove('arena-mode');
+                if (arenaTimer) clearInterval(arenaTimer);
+                window.router.navigate('/');
+            }
+        });
+    }
+
     // Template inicial
     const codeEl = document.getElementById('arena-code');
     const langSel = document.getElementById('arena-lang');
@@ -493,10 +518,10 @@ async function cargarMisClarificaciones(concursoId) {
 
     listEl.innerHTML = data.map(c => `
         <div class="clarif-item ${c.respuesta ? 'clarif-respondida' : 'clarif-pendiente'}">
-            <div class="clarif-pregunta"><i class="fa-solid fa-circle-question"></i> ${c.pregunta}</div>
+            <div class="clarif-pregunta"><i class="fa-solid fa-circle-question"></i> ${escapeHTML(c.pregunta)}</div>
             <div class="clarif-respuesta">
                 ${c.respuesta
-            ? `<i class="fa-solid fa-circle-check" style="color:var(--status-ac);"></i> <strong>Juez:</strong> ${c.respuesta}`
+            ? `<i class="fa-solid fa-circle-check" style="color:var(--status-ac);"></i> <strong>Juez:</strong> ${escapeHTML(c.respuesta)}`
             : `<i class="fa-solid fa-clock" style="color:var(--tecnm-gold);"></i> <em>Pendiente de respuesta...</em>`}
             </div>
             <div class="clarif-ts">${new Date(c.ts_pregunta).toLocaleTimeString('es-MX')}</div>
@@ -521,8 +546,8 @@ async function cargarClarificacionesPublicas(concursoId) {
 
     pubEl.innerHTML = data.map(c => `
         <div class="clarif-item clarif-respondida">
-            <div class="clarif-pregunta"><i class="fa-solid fa-users"></i> ${c.pregunta}</div>
-            <div class="clarif-respuesta"><i class="fa-solid fa-circle-check" style="color:var(--status-ac);"></i> <strong>Juez:</strong> ${c.respuesta}</div>
+            <div class="clarif-pregunta"><i class="fa-solid fa-users"></i> ${escapeHTML(c.pregunta)}</div>
+            <div class="clarif-respuesta"><i class="fa-solid fa-circle-check" style="color:var(--status-ac);"></i> <strong>Juez:</strong> ${escapeHTML(c.respuesta)}</div>
         </div>`).join('');
 }
 
@@ -566,9 +591,9 @@ function mostrarToastAnuncio(anuncio) {
     toast.innerHTML = `
         <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.3rem;">
             <i class="fa-solid ${icon}" style="color:${color};font-size:1rem;"></i>
-            <strong style="color:white;font-size:.9rem;">${anuncio.titulo || 'Anuncio del Juez'}</strong>
+            <strong style="color:white;font-size:.9rem;">${escapeHTML(anuncio.titulo || 'Anuncio del Juez')}</strong>
         </div>
-        <p style="color:rgba(255,255,255,.75);font-size:.83rem;margin:0;">${anuncio.mensaje}</p>
+        <p style="color:rgba(255,255,255,.75);font-size:.83rem;margin:0;">${escapeHTML(anuncio.mensaje)}</p>
         <div style="text-align:right;margin-top:.4rem;">
             <small style="color:rgba(255,255,255,.3);font-size:.75rem;">${new Date().toLocaleTimeString('es-MX')}</small>
         </div>`;
@@ -620,8 +645,8 @@ function renderProbPills(problemas) {
         </button>`).join('');
 
     pills.querySelectorAll('.arena-prob-pill').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const prob = AuthState.db.getProblemaById(btn.dataset.pid);
+        btn.addEventListener('click', async () => {
+            const prob = await AuthState.db.getProblemaById(btn.dataset.pid);
             if (prob) {
                 pills.querySelectorAll('.arena-prob-pill').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
@@ -636,23 +661,49 @@ function seleccionarProblema(prob) {
     const content = document.getElementById('arena-prob-content');
     if (!content) return;
 
-    const ejemplos = (prob.ejemplos || []).slice(0, 2).map(ej => `
+    // Ejemplos (acepta varios formatos de nombre de campo)
+    const ejemplos = (prob.casos_prueba || prob.ejemplos || []).slice(0, 2).map(ej => `
         <div class="ejemplo-block">
             <div class="ejemplo-col">
                 <div class="ejemplo-header">Input</div>
-                <pre class="ejemplo-pre">${ej.input}</pre>
+                <pre class="ejemplo-pre">${ej.input || ej.entrada || ''}</pre>
             </div>
             <div class="ejemplo-col">
-                <div class="ejemplo-header">Output</div>
-                <pre class="ejemplo-pre">${ej.output}</pre>
+                <div class="ejemplo-header">Output esperado</div>
+                <pre class="ejemplo-pre">${ej.output || ej.expected || ej.salida_esperada || ''}</pre>
             </div>
         </div>`).join('');
 
+    // Renderizar descripción: acepta descripcion, desc, o markdown
+    const rawDesc = prob.descripcion || prob.desc || '<p style="opacity:.5;">Este problema no tiene descripción acú en la plataforma. Consulta el enlace original.</p>';
+    const renderedDesc = (typeof marked !== 'undefined') ? marked.parse(rawDesc) : rawDesc;
+
     content.innerHTML = `
         <div class="prob-render">
-            ${prob.desc || '<p>Sin descripción.</p>'}
-            ${ejemplos ? `<h4 class="ejemplos-title">Ejemplos</h4>${ejemplos}` : ''}
+            <h2 style="color:var(--tecnm-gold);margin-top:0;font-size:1.1rem;">${prob.titulo}</h2>
+            <div style="display:flex;gap:8px;align-items:center;margin-bottom:1rem;flex-wrap:wrap;">
+                <span style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);padding:2px 8px;border-radius:4px;font-size:0.75rem;">
+                    <i class="fa-solid fa-clock" style="color:var(--tecnm-gold);"></i> Límite: ${prob.tiempo_limite || 2000}ms
+                </span>
+                <span style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);padding:2px 8px;border-radius:4px;font-size:0.75rem;">
+                    <i class="fa-solid fa-memory" style="color:var(--tecnm-blue);"></i> Memoria: ${prob.memoria_limite || 256}MB
+                </span>
+                ${(prob.tags || []).slice(0, 4).map(t => `<span style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);padding:2px 8px;border-radius:4px;font-size:0.7rem;opacity:0.7;">${t}</span>`).join('')}
+            </div>
+            <div class="markdown-body" style="color:#cbd5e1;line-height:1.7;">${renderedDesc}</div>
+            ${ejemplos ? `<h4 class="ejemplos-title" style="margin-top:1.5rem;">Ejemplos</h4>${ejemplos}` : ''}
         </div>`;
+
+    // Renderizar LaTeX si está disponible
+    if (typeof renderMathInElement === 'function') {
+        renderMathInElement(content, {
+            delimiters: [
+                { left: '$$', right: '$$', display: true },
+                { left: '$', right: '$', display: false }
+            ],
+            throwOnError: false
+        });
+    }
 
     // Actualizar output panel
     document.getElementById('arena-output-pre').textContent = 'Escribe tu código y presiona Probar o Enviar.';
@@ -680,36 +731,81 @@ async function probarCodigo(esEnvio) {
 
     outputPanel.className = 'arena-output-panel loading';
     outputPre.textContent = esEnvio
-        ? '⏳ Ejecutando código REAL en servidor... (puede tardar 3–8 segundos)'
+        ? '⏳ Evaluando todos los casos de prueba en servidor real...'
         : '⏳ Ejecutando en servidor...';
     verdBadge.innerHTML = '';
     if (btnEnviar) btnEnviar.disabled = true;
     if (btnProbar) btnProbar.disabled = true;
 
     const casos = problemaActivo.casos_prueba || problemaActivo.testcases || problemaActivo.ejemplos || [];
-    const primer = casos[0] || {};
-    const stdin = primer.entrada || primer.input || '';
-    const expected = (primer.salida_esperada || primer.output || primer.expected || '').trim();
+    const timeLimitSec = (problemaActivo.tiempo_limite || 2000) / 1000;
+    const memLimitKB = (problemaActivo.memoria_limite || 256) * 1024;
 
     let resultado;
     try {
-        if (esEnvio) {
-            resultado = await Judge0.evaluate(
-                code, lang, stdin, expected,
-                (problemaActivo.tiempo_limite || 2000) / 1000,
-                (problemaActivo.memoria_limite || 256) * 1024
-            );
-            if (resultado.veredicto === 'SE') {
-                outputPre.textContent = '⚠️ Judge0 no disponible, usando simulación...';
-                await new Promise(r => setTimeout(r, 600));
-                const sim = JudgeSim.evaluate(code, lang, problemaActivo);
-                resultado = { ...sim, output: sim.output || sim.mensaje };
+        if (esEnvio && casos.length > 1) {
+            // ── Evaluar TODOS los casos de prueba ────────────────────
+            outputPre.textContent = `⏳ Evaluando caso 1 de ${casos.length}...`;
+            let veredictoFinal = 'AC';
+            let tiempoTotal = 0;
+            let memoriaMax = 0;
+            let outputFinal = '';
+            let casoFallido = -1;
+
+            for (let i = 0; i < casos.length; i++) {
+                const tc = casos[i];
+                const stdin = tc.entrada || tc.input || '';
+                const expected = (tc.salida_esperada || tc.output || tc.expected || '').trim();
+                outputPre.textContent = `⏳ Evaluando caso ${i + 1} de ${casos.length}...`;
+
+                const r = await Judge0.evaluate(code, lang, stdin, expected, timeLimitSec, memLimitKB);
+                tiempoTotal += r.tiempo_ms || 0;
+                if ((r.memoria_kb || 0) > memoriaMax) memoriaMax = r.memoria_kb;
+
+                if (r.veredicto === 'SE') {
+                    // Judge0 no disponible, usar simulación
+                    const sim = JudgeSim.evaluate(code, lang, problemaActivo);
+                    resultado = { ...sim, output: sim.output || sim.mensaje };
+                    veredictoFinal = sim.veredicto;
+                    break;
+                }
+
+                if (r.veredicto !== 'AC') {
+                    veredictoFinal = r.veredicto;
+                    casoFallido = i + 1;
+                    outputFinal = r.output || r.mensaje;
+                    break;
+                }
+                outputFinal = r.output;
             }
+
+            resultado = resultado || {
+                veredicto: veredictoFinal,
+                tiempo_ms: tiempoTotal,
+                memoria_kb: memoriaMax,
+                output: outputFinal,
+                casoFallido
+            };
         } else {
-            resultado = await Judge0.run(code, lang, primer);
-            if (resultado.veredicto === 'SE') {
-                const sim = JudgeSim.run(code, lang, primer);
-                resultado = { ok: sim.ok, output: sim.output, veredicto: sim.ok ? 'AC' : 'WA' };
+            // ── Un solo caso o modo Probar ────────────────────────────
+            const primer = casos[0] || {};
+            const stdin = primer.entrada || primer.input || '';
+            const expected = (primer.salida_esperada || primer.output || primer.expected || '').trim();
+
+            if (esEnvio) {
+                resultado = await Judge0.evaluate(code, lang, stdin, expected, timeLimitSec, memLimitKB);
+                if (resultado.veredicto === 'SE') {
+                    outputPre.textContent = '⚠️ Judge0 no disponible, usando simulación...';
+                    await new Promise(r => setTimeout(r, 600));
+                    const sim = JudgeSim.evaluate(code, lang, problemaActivo);
+                    resultado = { ...sim, output: sim.output || sim.mensaje };
+                }
+            } else {
+                resultado = await Judge0.run(code, lang, primer);
+                if (resultado.veredicto === 'SE') {
+                    const sim = JudgeSim.run(code, lang, primer);
+                    resultado = { ok: sim.ok, output: sim.output, veredicto: sim.ok ? 'AC' : 'WA' };
+                }
             }
         }
     } catch (e) {
@@ -726,13 +822,47 @@ async function probarCodigo(esEnvio) {
         </span>`;
 
     outputPanel.className = `arena-output-panel vp-${v.toLowerCase()}`;
+
     const timeTxt = resultado.tiempo_ms ? `${resultado.tiempo_ms}ms` : '';
     const memTxt = resultado.memoria_kb ? `${Math.round(resultado.memoria_kb / 1024)}MB` : '';
     outputTitle.textContent = [esEnvio ? 'Envío' : 'Prueba', timeTxt, memTxt].filter(Boolean).join(' | ');
 
     const errExtra = resultado.error && resultado.error !== resultado.output ? `\n-- Stderr --\n${resultado.error}` : '';
-    outputPre.textContent = (resultado.output + errExtra).trim() || resultado.mensaje || '(sin salida)';
+    let outputText = (resultado.output + errExtra).trim() || resultado.mensaje || '(sin salida)';
+    if (resultado.casoFallido > 0) outputText = `❌ Falló en caso de prueba #${resultado.casoFallido}\n\n${outputText}`;
+    outputPre.textContent = outputText;
 
+    // ── Criterios de Calificación (solo en envíos AC) ────────────────
+    if (esEnvio && v === 'AC') {
+        const codigoChars = code.length;
+        const tiempoMs = resultado.tiempo_ms || 0;
+        const tiempoLimiteMs = (problemaActivo.tiempo_limite || 2000);
+        const pctTiempo = Math.min(100, Math.round((tiempoMs / tiempoLimiteMs) * 100));
+        const velocidadLabel = pctTiempo < 25 ? '🚀 Excelente' : pctTiempo < 60 ? '✅ Bueno' : '⚠️ Lento';
+        const tamLabel = codigoChars < 500 ? '✨ Compacto' : codigoChars < 1500 ? '✅ Normal' : '📦 Extenso';
+
+        outputPre.innerHTML = `
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.6rem;margin-bottom:.8rem;">
+    <div style="background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);border-radius:8px;padding:.5rem .8rem;text-align:center;">
+        <div style="font-size:.7rem;opacity:.6;text-transform:uppercase;letter-spacing:1px;">Velocidad</div>
+        <div style="font-weight:700;color:#22c55e;">${tiempoMs}ms</div>
+        <div style="font-size:.7rem;">${velocidadLabel}</div>
+    </div>
+    <div style="background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.3);border-radius:8px;padding:.5rem .8rem;text-align:center;">
+        <div style="font-size:.7rem;opacity:.6;text-transform:uppercase;letter-spacing:1px;">Memoria</div>
+        <div style="font-weight:700;color:#3b82f6;">${Math.round((resultado.memoria_kb||0)/1024)}MB</div>
+        <div style="font-size:.7rem;">de ${problemaActivo.memoria_limite||256}MB</div>
+    </div>
+    <div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:8px;padding:.5rem .8rem;text-align:center;">
+        <div style="font-size:.7rem;opacity:.6;text-transform:uppercase;letter-spacing:1px;">Tamaño</div>
+        <div style="font-weight:700;color:#f59e0b;">${codigoChars} chars</div>
+        <div style="font-size:.7rem;">${tamLabel}</div>
+    </div>
+</div>
+<pre style="margin:0;background:transparent;border:none;font-size:.82rem;color:rgba(255,255,255,.75);">✅ Todos los casos de prueba pasaron (${casos.length}/${casos.length})</pre>`;
+    }
+
+    // ── Guardar submission en Supabase ────────────────────────────────
     if (esEnvio && AuthState.isAlumno() && window.currentConcursoId) {
         await AuthState.db.addSubmission({
             alumno_email: AuthState.user.email,
@@ -752,6 +882,7 @@ async function probarCodigo(esEnvio) {
     if (btnEnviar) btnEnviar.disabled = false;
     if (btnProbar) btnProbar.disabled = false;
 }
+
 
 // ── Historial de Envíos del equipo ─────────────────────────────────────────
 
@@ -824,7 +955,8 @@ async function renderArenaScoreboardById(concursoId) {
     const concurso = await AuthState.db.getConcursoById(concursoId);
     if (!concurso) return;
 
-    const problemas = (concurso.problemas || []).map(id => AuthState.db.getProblemaById(id)).filter(Boolean);
+    const problemas = await Promise.all((concurso.problemas || []).map(id => AuthState.db.getProblemaById(id)));
+    const validProblemas = problemas.filter(Boolean);
     const subs = await AuthState.db.getSubmissionsByConcurso(concursoId);
 
     const isFrozen = concurso.ts_congela_at && Date.now() > new Date(concurso.ts_congela_at).getTime();
@@ -842,15 +974,22 @@ async function renderArenaScoreboardById(concursoId) {
         }
 
         if (!equipos[s.equipo]) equipos[s.equipo] = { probs: {}, total: 0, penalty: 0 };
-        if (!equipos[s.equipo].probs[s.problema_id]) equipos[s.equipo].probs[s.problema_id] = { ac: false, tries: 0 };
+        if (!equipos[s.equipo].probs[s.problema_id]) {
+            equipos[s.equipo].probs[s.problema_id] = { ac: false, tries: 0, tsAC: null };
+        }
 
-        if (s.veredicto === 'AC' && !equipos[s.equipo].probs[s.problema_id].ac) {
-            equipos[s.equipo].probs[s.problema_id].ac = true;
+        const prob = equipos[s.equipo].probs[s.problema_id];
+        if (s.veredicto === 'AC' && !prob.ac) {
+            prob.ac = true;
+            prob.tsAC = s.timestamp || s.ts_servidor;
             equipos[s.equipo].total++;
-            // Penalización básica
-            equipos[s.equipo].penalty += (equipos[s.equipo].probs[s.problema_id].tries * 20);
-        } else if (s.veredicto !== 'AC' && !equipos[s.equipo].probs[s.problema_id].ac) {
-            equipos[s.equipo].probs[s.problema_id].tries++;
+            // Penalización ICPC real:
+            // tiempo_del_primer_AC (en minutos desde inicio) + 20 min por cada WA previo
+            const tsInicio = concurso.ts_inicio || 0;
+            const minutosDesdeInicio = tsInicio ? Math.floor((prob.tsAC - tsInicio) / 60000) : 0;
+            equipos[s.equipo].penalty += minutosDesdeInicio + (prob.tries * 20);
+        } else if (s.veredicto !== 'AC' && !prob.ac) {
+            prob.tries++;
         }
     });
 
@@ -864,12 +1003,12 @@ async function renderArenaScoreboardById(concursoId) {
     wrap.innerHTML = `
         ${isFrozen ? '<div class="sb-freeze-notice"><i class="fa-solid fa-snowflake"></i> ESCOREBOARD CONGELADO — Resultados finales ocultos</div>' : ''}
         <table class="scoreboard-table arena-score-sm">
-        <thead><tr><th>#</th><th>Equipo</th>${problemas.map((_, i) => `<th>${String.fromCharCode(65 + i)}</th>`).join('')}<th>AC</th><th>PEN</th></tr></thead>
+        <thead><tr><th>#</th><th>Equipo</th>${validProblemas.map((_, i) => `<th>${String.fromCharCode(65 + i)}</th>`).join('')}<th>AC</th><th>PEN</th></tr></thead>
         <tbody>${rows.map(([eq, data], i) => `
             <tr class="${i === 0 ? 'rank-1' : ''} ${i === 1 ? 'rank-2' : ''} ${eq === myTeam ? 'my-team-row' : ''}">
                 <td>${i + 1}</td>
-                <td style="text-align:left; font-weight:600;">${eq === myTeam ? `<i class="fa-solid fa-star" style="color:var(--tecnm-gold);"></i> ${eq}` : eq}</td>
-                ${problemas.map(p => {
+                <td style="text-align:left; font-weight:600;">${eq === myTeam ? `<i class="fa-solid fa-star" style="color:var(--tecnm-gold);"></i> ${escapeHTML(eq)}` : escapeHTML(eq)}</td>
+                ${validProblemas.map(p => {
         const st = data.probs[p.id];
         const cls = st?.ac ? 'sb-ac' : (st?.tries > 0 ? 'sb-wa' : 'sb-empty');
         return `<td class="${cls}">${st?.ac ? '✓' : (st?.tries > 0 ? `-${st.tries}` : '—')}</td>`;
@@ -912,32 +1051,6 @@ function updateLineNums() {
     if (nums) nums.textContent = Array.from({ length: lines }, (_, i) => i + 1).join('\n');
 }
 
-function renderArenaScoreboard(concurso) {
-    const wrap = document.getElementById('arena-scoreboard');
-    if (!wrap) return;
-    const problemas = (concurso.problemas || []).map(id => AuthState.db.getProblemaById(id)).filter(Boolean);
-    const subs = AuthState.db.getSubmissionsByConcurso(concurso.id);
-
-    const equipos = {};
-    subs.forEach(s => {
-        if (!equipos[s.equipo]) equipos[s.equipo] = { probs: {}, total: 0 };
-        if (!equipos[s.equipo].probs[s.problema_id]) equipos[s.equipo].probs[s.problema_id] = false;
-        if (s.veredicto === 'AC') { equipos[s.equipo].probs[s.problema_id] = true; equipos[s.equipo].total++; }
-    });
-
-    const rows = Object.entries(equipos).sort((a, b) => b[1].total - a[1].total);
-    if (!rows.length) { wrap.innerHTML = '<p style="color:rgba(255,255,255,.3);padding:2rem;text-align:center;">Sin submissions.</p>'; return; }
-
-    wrap.innerHTML = `<table class="scoreboard-table arena-score-sm">
-        <thead><tr><th>#</th><th>Equipo</th>${problemas.map((_, i) => `<th>${String.fromCharCode(65 + i)}</th>`).join('')}<th>AC</th></tr></thead>
-        <tbody>${rows.map(([eq, data], i) => `
-            <tr class="${i === 0 ? 'rank-1' : ''}">
-                <td>${i + 1}</td><td>${eq}</td>
-                ${problemas.map(p => `<td class="${data.probs[p.id] ? 'sb-ac' : 'sb-empty'}">${data.probs[p.id] ? '✓' : '—'}</td>`).join('')}
-                <td class="sb-total">${data.total}</td>
-            </tr>`).join('')}
-        </tbody></table>`;
-}
 
 // ── Sala de Espera Pre-Concurso (Countdown) ──
 let preTimerInterval = null;
@@ -956,7 +1069,7 @@ function renderCountdown(concurso) {
                 
                 <i class="fa-solid fa-rocket fa-3x" style="color:var(--tecnm-gold); margin-bottom:1.5rem; animation:pulse 2s infinite;"></i>
                 
-                <h1 style="font-size:2rem; margin-bottom:0.5rem; font-weight:800;">${concurso.nombre}</h1>
+                <h1 style="font-size:2rem; margin-bottom:0.5rem; font-weight:800;">${concurso.titulo || 'Concurso Programado'}</h1>
                 <p style="color:rgba(255,255,255,0.7); font-size:1.1rem; margin-bottom:2rem;">El concurso está programado, pero aún no inicia.</p>
                 
                 <div style="display:flex; justify-content:center; gap:1.5rem; margin-bottom:2.5rem;">

@@ -20,6 +20,16 @@ export const RegisterProfesorView = () => {
                 err.textContent = 'Las contraseñas no coinciden.';
                 return;
             }
+            if (pass.length < 8) {
+                err.style.display = 'block';
+                err.textContent = 'La contraseña debe tener al menos 8 caracteres.';
+                return;
+            }
+            if (!name) {
+                err.style.display = 'block';
+                err.textContent = 'El nombre es requerido.';
+                return;
+            }
 
             btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Creando Cuenta...';
             btn.disabled = true;

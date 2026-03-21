@@ -57,7 +57,7 @@ export const UIToast = {
             }
             @keyframes toast-out {
                 from { transform: translateX(0); opacity: 1; }
-                to { transform: translateX(20%) opacity: 0; }
+                to { transform: translateX(20%); opacity: 0; }
             }
         `;
         document.head.appendChild(style);

@@ -55,7 +55,7 @@ export const LoginAdminView = () => {
                 <div class="form-group">
                     <label class="form-label">Correo Admin</label>
                     <input type="email" id="admin-email" class="form-input" required
-                        placeholder="admin@icpc.itcm.mx" value="admin@icpc.itcm.mx">
+                        placeholder="tu-correo@itcm.mx" autocomplete="username">
                 </div>
                 <div class="form-group">
                     <label class="form-label">Contraseña</label>

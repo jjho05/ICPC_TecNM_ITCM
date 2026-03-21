@@ -1,6 +1,7 @@
 import { AuthState } from '../core/authState.js';
 import { supabase } from '../core/supabaseClient.js';
 import { UIModal } from './ui/modal.js';
+import { generarCertificado, getConcursosFinalizadosAlumno } from '../core/pdfService.js';
 
 export const ProfileView = () => {
     setTimeout(initProfile, 100);
@@ -10,12 +11,12 @@ export const ProfileView = () => {
         <div class="profile-container">
             <header class="profile-header">
                 <div class="profile-avatar-large">
-                    ${AuthState.user.nombre.charAt(0)}
+                    ${(AuthState.user.nombre || AuthState.user.team || AuthState.user.email || '?').charAt(0).toUpperCase()}
                 </div>
                 <div class="profile-title-block">
-                    <h2 class="profile-name-display">${AuthState.user.nombre}</h2>
+                    <h2 class="profile-name-display">${AuthState.user.nombre || AuthState.user.team || AuthState.user.email}</h2>
                     <p class="profile-email-display">${AuthState.user.email}</p>
-                    <span class="profile-role-badge">${AuthState.user.rol.toUpperCase()}</span>
+                    <span class="profile-role-badge">${(AuthState.user.type || AuthState.user.rol || 'usuario').toUpperCase()}</span>
                 </div>
             </header>
 
@@ -40,7 +41,14 @@ export const ProfileView = () => {
                     </form>
                 </div>
 
-                <!-- Columna: Seguridad -->
+                <!-- Columna: Seguridad (solo para profesores con contraseña) -->
+                ${AuthState.isAlumno() ? `
+                <div class="profile-card">
+                    <h3 class="pcard-title"><i class="fa-solid fa-shield-check"></i> Cuenta de Alumno</h3>
+                    <div class="pcard-body">
+                        <p style="opacity:.7;font-size:.9rem;">Tu acceso a la plataforma es via correo registrado por tu Coach. Para cambiar tus datos contacta a tu Profesor.</p>
+                    </div>
+                </div>` : `
                 <div class="profile-card">
                     <h3 class="pcard-title"><i class="fa-solid fa-lock"></i> Seguridad</h3>
                     <form id="profile-security-form" class="pcard-body">
@@ -55,14 +63,29 @@ export const ProfileView = () => {
                         </div>
                         <button type="submit" class="btn-profile btn-profile--accent">Cambiar Contraseña</button>
                     </form>
-                </div>
+                </div>`}
             </div>
 
             <footer class="profile-footer">
                 <button class="btn btn-ghost" onclick="window.history.back()">
                     <i class="fa-solid fa-arrow-left"></i> Volver
                 </button>
-            </div>
+            </footer>
+
+            <!-- Sección Mis Certificados (solo para Alumnos) -->
+            ${
+            AuthState.isAlumno() ? `
+            <div class="profile-card" style="margin-top:2rem; grid-column: 1 / -1;">
+                <h3 class="pcard-title"><i class="fa-solid fa-certificate"></i> Mis Certificados de Participaci&oacute;n</h3>
+                <div class="pcard-body">
+                    <div id="lista-certificados">
+                        <div style="text-align:center; padding:1.5rem; opacity:0.5;">
+                            <i class="fa-solid fa-spinner fa-spin"></i> Cargando...
+                        </div>
+                    </div>
+                </div>
+            </div>` : ''
+            }
         </div>
     </div>
 
@@ -100,6 +123,11 @@ async function initProfile() {
     const academicForm = document.getElementById('profile-academic-form');
     const securityForm = document.getElementById('profile-security-form');
 
+    // Cargar certificados si es alumno
+    if (AuthState.isAlumno()) {
+        cargarCertificados();
+    }
+
     academicForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const data = {
@@ -109,7 +137,7 @@ async function initProfile() {
         };
 
         const { error } = await supabase
-            .from('icpc_usuarios_v2')
+            .from('icpc_usuarios')
             .update(data)
             .eq('email', AuthState.user.email);
 
@@ -141,7 +169,7 @@ async function initProfile() {
         const hashed = await AuthState._hash(pass);
 
         const { error } = await supabase
-            .from('icpc_usuarios_v2')
+            .from('icpc_usuarios')
             .update({ password: `${hashed}` })
             .eq('email', AuthState.user.email);
 
@@ -152,4 +180,47 @@ async function initProfile() {
             setTimeout(() => AuthState.logout(), 2000);
         }
     });
+}
+
+async function cargarCertificados() {
+    const el = document.getElementById('lista-certificados');
+    if (!el) return;
+
+    const concursos = await getConcursosFinalizadosAlumno(AuthState.user.email);
+
+    if (!concursos.length) {
+        el.innerHTML = `
+            <div style="text-align:center; padding:1.5rem; opacity:0.5;">
+                <i class="fa-solid fa-file-xmark" style="font-size:2rem;"></i>
+                <p style="margin-top:.8rem;">Aún no tienes concursos finalizados con certificado disponible.</p>
+            </div>`;
+        return;
+    }
+
+    el.innerHTML = concursos.map(c => `
+        <div style="display:flex; align-items:center; justify-content:space-between;
+            background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.07);
+            border-radius:12px; padding:1rem 1.5rem; margin-bottom:0.75rem;">
+            <div>
+                <div style="font-weight:700; font-size:1rem;">${c.titulo}</div>
+                <div style="font-size:0.8rem; opacity:0.5; margin-top:2px;">
+                    <i class="fa-regular fa-calendar"></i>
+                    ${c.fecha_inicio ? new Date(c.fecha_inicio).toLocaleDateString('es-MX', { day:'numeric', month:'long', year:'numeric' }) : '—'}
+                </div>
+            </div>
+            <button class="btn btn-primary" style="font-size:0.85rem;"
+                onclick="window._descargarCert('${c.id}')">
+                <i class="fa-solid fa-file-pdf"></i> Descargar PDF
+            </button>
+        </div>
+    `).join('');
+
+    window._descargarCert = async (concursoId) => {
+        const btn = event.target;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Generando...';
+        await generarCertificado(AuthState.user.email, concursoId);
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-file-pdf"></i> Descargar PDF';
+    };
 }

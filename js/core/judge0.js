@@ -120,7 +120,10 @@ export const Judge0 = {
             // Si Judge0 no comparó (no había expected_output), comparar manualmente
             let verdFinal = veredicto;
             if (veredicto === 'AC' && expectedOut) {
-                const match = stdout === expectedOut.trim();
+                // Comparación robusta estilo ICPC: Ignorar espacios finales en cada línea y saltos vacíos al final
+                const cleanOut = stdout.split('\n').map(l => l.trimEnd()).join('\n').trim();
+                const cleanExp = expectedOut.split('\n').map(l => l.trimEnd()).join('\n').trim();
+                const match = cleanOut === cleanExp;
                 verdFinal = match ? 'AC' : 'WA';
             }
 

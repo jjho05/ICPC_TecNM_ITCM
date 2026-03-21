@@ -43,22 +43,23 @@ export const CheckinAlumnoView = () => {
                     return;
                 }
 
-                // 2. Verificar que haya un concurso activo para ese participante
+                // 2. Determinar el concurso correcto para el check-in
                 const concursos = await AuthState.db.getConcursos();
-                const concursoActivo = concursos.find(c => c.estado === 'activo' && c.id === resultado.concursoId);
 
-                if (!concursoActivo) {
-                    // Intento 2: quizá el concurso esté activo pero el ID difiere
-                    const cualquierActivo = concursos.find(c => c.estado === 'activo');
-                    if (!cualquierActivo) {
-                        errorBox.style.display = 'block';
-                        errorBox.innerHTML = `<strong>Sin concurso activo:</strong> No hay competencias en curso en este momento. Vuelve cuando tu Juez haya iniciado el concurso.`;
-                        return;
-                    }
+                // Buscar concurso activo: primero el que le corresponde, luego cualquier activo
+                let concursoFinal = concursos.find(c => c.estado === 'activo' && c.id === resultado.concursoId);
+                if (!concursoFinal) {
+                    concursoFinal = concursos.find(c => c.estado === 'activo');
+                }
+
+                if (!concursoFinal) {
+                    errorBox.style.display = 'block';
+                    errorBox.innerHTML = `<strong>Sin concurso activo:</strong> No hay competencias en curso. Vuelve cuando tu Juez haya iniciado el concurso.`;
+                    return;
                 }
 
                 // 3. Registrar check-in en la BD
-                await AuthState.db.setCheckin(email, resultado.concursoId);
+                await AuthState.db.setCheckin(email, concursoFinal.id);
 
                 // 4. Iniciar sesión con datos de la BD (equipo y nombre oficiales)
                 AuthState.loginAsAlumno(email, resultado.equipo || email, resultado.nombre || email);

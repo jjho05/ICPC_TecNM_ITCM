@@ -9,7 +9,6 @@ export const LoginProfesorView = () => {
             e.preventDefault();
             const email = document.getElementById('profesor-email').value.trim();
             const pass = document.getElementById('profesor-pass').value;
-            const name = document.getElementById('profesor-name').value.trim();
             const err = document.getElementById('profesor-login-err');
             const btn = form.querySelector('button[type="submit"]');
 
@@ -50,21 +49,13 @@ export const LoginProfesorView = () => {
 
             <form id="profesor-login-form">
                 <div class="form-group">
-                    <label class="form-label">Nombre (para mostrar en el scoreboard/eventos)</label>
-                    <input type="text" id="profesor-name" class="form-input" placeholder="Ing. Nombre Apellido">
-                </div>
-                <div class="form-group">
                     <label class="form-label">Correo Institucional</label>
-                    <input type="email" id="profesor-email" class="form-input" required placeholder="profesor@itcm.edu.mx">
+                    <input type="email" id="profesor-email" class="form-input" required placeholder="profesor@itcm.edu.mx" autocomplete="username">
                 </div>
                 <div class="form-group">
                     <label class="form-label">Contraseña</label>
-                    <input type="password" id="profesor-pass" class="form-input" required placeholder="••••••••">
+                    <input type="password" id="profesor-pass" class="form-input" required placeholder="••••••••" autocomplete="current-password">
                 </div>
-                <p class="coach-login-hint">
-                    <i class="fa-solid fa-circle-info"></i>
-                    Primera vez sin cuenta: ingresa cualquier correo simulado para Entorno Local.
-                </p>
                 <button type="submit" class="btn btn-primary" style="width:100%;margin-top:.5rem;">
                     Ingresar al Panel
                 </button>

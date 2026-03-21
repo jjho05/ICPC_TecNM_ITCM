@@ -1,6 +1,7 @@
 import { AuthState } from '../core/authState.js';
 import { JudgeSim } from '../core/judgeSim.js';
 import { UIModal } from './ui/modal.js';
+import { supabase } from '../core/supabaseClient.js';
 import { PROBLEMS_SEED } from '../data/problemsSeed.js';
 
 // ══════════════════════════════════════════════════════
@@ -8,15 +9,22 @@ import { PROBLEMS_SEED } from '../data/problemsSeed.js';
 //  Tabs: Banco de Problemas | Editor | Coaches | Concursos
 // ══════════════════════════════════════════════════════
 
+function escapeHTML(str) {
+    if (!str) return '';
+    return String(str).replace(/[&<>"']/g, function(m) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m];
+    });
+}
+
 export const AdminPanelView = () => {
 
-    // Seed initial problems if empty
-    if (AuthState.db.getProblemas().length === 0) {
-        AuthState.db.saveProblemasLote(PROBLEMS_SEED);
-    }
-
-    setTimeout(() => {
+    // Seed inicial de problemas si la BD está vacía (async)
+    setTimeout(async () => {
         if (!AuthState.isAdmin()) { window.router.navigate('/'); return; }
+        const existentes = await AuthState.db.getProblemas();
+        if (!existentes || existentes.length === 0) {
+            await AuthState.db.saveProblemasLote(PROBLEMS_SEED);
+        }
         bindAdminEvents();
         renderTab('tab-banco');
     }, 100);
@@ -415,7 +423,7 @@ async function renderBanco() {
     const diff = document.getElementById('filter-dificultad')?.value || '';
     const fuente = document.getElementById('filter-fuente')?.value || '';
 
-    const { data: pagina, count } = await AuthState.db.getProblemas(bancoPagina, BANCO_POR_PAGINA, {
+    const { data: pagina, count } = await AuthState.db.getProblemasPaginados(bancoPagina, BANCO_POR_PAGINA, {
         search,
         dificultad: diff,
         fuente: fuente
@@ -431,9 +439,9 @@ async function renderBanco() {
     body.innerHTML = pagina.map((p, i) => `
         <tr>
             <td>${inicio + i + 1}</td>
-            <td class="problema-titulo">${p.titulo}</td>
+            <td class="problema-titulo">${escapeHTML(p.titulo)}</td>
             <td><span class="diff-badge diff-${getDiffClass(p.dificultad)}">${p.dificultad || '?'}</span></td>
-            <td class="tags-cell">${(p.tags || []).slice(0, 3).map(t => `<span class="tag-chip">${t}</span>`).join('')}</td>
+            <td class="tags-cell">${(p.tags || []).slice(0, 3).map(t => `<span class="tag-chip">${escapeHTML(t)}</span>`).join('')}</td>
             <td><span class="fuente-badge">${p.fuente || 'local'}</span></td>
             <td class="acciones-cell">
                 <button class="btn-tbl" onclick="window._adminEditProblema('${p.id}')"><i class="fa-solid fa-pen"></i></button>
@@ -695,7 +703,7 @@ function runEditorCode() {
             <span class="verd-badge verd-${resultado.ok ? 'ac' : 'wa'}">${resultado.ok ? 'AC' : 'WA'}</span>
             <span style="font-size:.8rem;color:rgba(255,255,255,.4);">Output simulado</span>
         </div>
-        <pre class="run-pre">${resultado.output || '(sin salida)'}</pre>
+        <pre class="run-pre">${escapeHTML(resultado.output) || '(sin salida)'}</pre>
     `;
 }
 
@@ -729,19 +737,21 @@ async function guardarProblema(publicar) {
     }
 }
 
-function renderProfesores() {
+async function renderProfesores() {
     const body = document.getElementById('tabla-profesores-body');
     if (!body) return;
-    const usuarios = AuthState.db.getUsuarios();
+    body.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:1rem;opacity:.4;"><i class="fa-solid fa-spinner fa-spin"></i> Cargando...</td></tr>';
+
+    const usuarios = await AuthState.db.getUsuarios();
+    const concursos = await AuthState.db.getConcursos();
 
     body.innerHTML = usuarios.length
         ? usuarios.map(u => {
-            const concursos = AuthState.db.getConcursos();
-            const esJuez = concursos.filter(c => c.jueces_ids.includes(u.email)).length;
-            const esCoach = concursos.filter(c => c.coaches_ids.includes(u.email)).length;
+            const esJuez = concursos.filter(c => (c.jueces_ids || []).includes(u.email)).length;
+            const esCoach = concursos.filter(c => (c.coaches_ids || []).includes(u.email)).length;
             return `
             <tr>
-                <td>${u.name}</td>
+                <td>${u.nombre || u.name || '—'}</td>
                 <td>${u.email}</td>
                 <td><span style="color:var(--tecnm-blue);font-weight:600;">${esJuez} J</span> / <span style="color:var(--tecnm-gold);font-weight:600;">${esCoach} C</span></td>
                 <td><button class="btn-tbl btn-tbl--danger" onclick="window._removeProfesor('${u.email}')"><i class="fa-solid fa-trash"></i> Eliminar</button></td>
@@ -751,7 +761,8 @@ function renderProfesores() {
 
     window._removeProfesor = async (email) => {
         if (await UIModal.confirm('Eliminar Profesor', `¿Eliminar al profesor ${email}? Perderá acceso a sus eventos.`)) {
-            AuthState.db.removeUsuario(email); renderProfesores();
+            await supabase.from('icpc_usuarios').delete().eq('email', email);
+            renderProfesores();
         }
     };
 }
@@ -762,7 +773,12 @@ async function saveProfesor() {
     const pass = document.getElementById('profesor-new-pass').value.trim();
     if (!name || !email || !pass) { await UIModal.alert('Campos Incompletos', 'Completa todos los campos para añadir un profesor.'); return; }
 
-    AuthState.db.addUsuario(email, name, pass);
+    try {
+        await AuthState.db.registerUsuario({ email, name, password: pass });
+    } catch (e) {
+        await UIModal.alert('Error', 'No se pudo registrar al profesor. Puede que el correo ya exista.');
+        return;
+    }
 
     document.getElementById('form-add-profesor').style.display = 'none';
     document.getElementById('profesor-new-name').value = '';
@@ -969,7 +985,7 @@ async function renderAuditoria() {
     body.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:1.5rem;opacity:.4;"><i class="fa-solid fa-spinner fa-spin"></i> Cargando logs...</td></tr>';
 
     try {
-        let query = supabase.from('icpc_logs_auditoria').select('*').order('created_at', { ascending: false }).limit(100);
+        let query = supabase.from('icpc_auditoria').select('*').order('created_at', { ascending: false }).limit(100);
 
         const concursoId = sel?.value;
         if (concursoId) {
@@ -983,10 +999,10 @@ async function renderAuditoria() {
         body.innerHTML = data.length
             ? data.map(log => `
                 <tr>
-                    <td><small>${new Date(log.created_at).toLocaleString()}</small></td>
-                    <td><strong>${log.usuario_email}</strong></td>
-                    <td><span class="status-pill--done" style="font-size:0.7rem;">${log.accion}</span></td>
-                    <td><small style="opacity:0.7;">${log.detalles}</small></td>
+                    <td><small>${new Date(log.created_at || log.timestamp || Date.now()).toLocaleString('es-MX')}</small></td>
+                    <td><strong>${escapeHTML(log.alumno_email || log.usuario_email || log.equipo || 'Sistema')}</strong></td>
+                    <td><span class="status-pill--warn" style="font-size:0.7rem; padding:3px 8px; border-radius:4px;">${escapeHTML(log.tipo_violacion || log.accion || 'Violación')}</span></td>
+                    <td><small style="opacity:0.7;">${escapeHTML(log.detalle || log.detalles || '')}</small></td>
                 </tr>
             `).join('')
             : '<tr><td colspan="4" style="text-align:center;padding:2rem;opacity:.4;">No hay registros de auditoría aún.</td></tr>';

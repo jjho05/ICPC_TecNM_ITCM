@@ -11,6 +11,7 @@ import { StaffDashboardView } from '../components/staffDashboard.js';
 import { ProfileView } from '../components/profile.js';
 import { RegisterAdminView } from '../components/registerAdmin.js';
 import { AuthState } from './authState.js';
+import { supabase } from './supabaseClient.js';
 
 // ── Definición de rutas ───────────────────────────────
 const routes = {
@@ -74,6 +75,13 @@ export const initRouter = () => {
     };
 
     const render = (path) => {
+        // [V7 SEC/MEM_LEAK FIX] Limpiar suscripciones residuales de Supabase Realtime
+        // Evita que los canales del Admin (clarifs) o Alumnos (Scoreboard/Anuncios)
+        // se multipliquen en background consumiendo RAM en cada cambio de vista (SPA).
+        if (supabase && typeof supabase.removeAllChannels === 'function') {
+            supabase.removeAllChannels();
+        }
+
         // En caso de que se intente ir a una ruta no mapeada, vuelve a inicio
         const view = routes[path] || routes['/'];
         appRoot.innerHTML = typeof view === 'function' ? view() : '';
@@ -101,7 +109,14 @@ export const initRouter = () => {
     });
 
     document.addEventListener('keydown', e => {
-        if (e.key === 'Escape' && currentPath !== '/') window.router.navigate('/');
+        // Bloquear Escape en /arena para no permitir salida sin confirmación
+        if (e.key === 'Escape') {
+            if (currentPath === '/arena') {
+                e.preventDefault();
+                return; // La Arena maneja su propia salida
+            }
+            if (currentPath !== '/') window.router.navigate('/');
+        }
     });
 
     render(currentPath);

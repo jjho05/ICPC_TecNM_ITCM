@@ -37,8 +37,8 @@ export const AuthState = {
         localStorage.setItem('icpc_session', JSON.stringify(this.user));
     },
 
-    loginAsAlumno(email, team) {
-        this.user = { type: 'alumno', email, team };
+    loginAsAlumno(email, team, nombre = '') {
+        this.user = { type: 'alumno', email, team, nombre };
         localStorage.setItem('icpc_session', JSON.stringify(this.user));
     },
 
@@ -124,31 +124,30 @@ export const AuthState = {
             return true;
         },
 
-        // ─── Problemas (ahora en Supabase — tabla icpc_problemas) ───────────
-        async getProblemas(page = 1, pageSize = 20, filters = {}) {
+        // --- Problemas (Supabase: icpc_problemas) ---
+        async getProblemas(filters = {}) {
+            // Siempre devuelve un ARRAY — usado en arena, práctica y banco admin
+            let query = supabase.from('icpc_problemas').select('*');
+            if (filters.search) query = query.or(`titulo.ilike.%${filters.search}%`);
+            if (filters.dificultad) query = query.eq('dificultad', filters.dificultad);
+            if (filters.fuente) query = query.eq('fuente', filters.fuente);
+            if (filters.publicado !== undefined) query = query.eq('publicado', filters.publicado);
+            const { data, error } = await query.order('dificultad', { ascending: true });
+            if (error) { console.error('getProblemas:', error); return []; }
+            return data || [];
+        },
+        async getProblemasPaginados(page = 1, pageSize = 20, filters = {}) {
+            // Versión para el admin con paginación y conteo (devuelve {data, count})
             let query = supabase.from('icpc_problemas').select('*', { count: 'exact' });
-
-            if (filters.search) {
-                query = query.or(`titulo.ilike.%${filters.search}%,tags.cs.{${filters.search}}`);
-            }
-            if (filters.dificultad) {
-                query = query.eq('dificultad', filters.dificultad);
-            }
-            if (filters.fuente) {
-                query = query.eq('fuente', filters.fuente);
-            }
-            if (filters.publicado !== undefined) {
-                query = query.eq('publicado', filters.publicado);
-            }
-
+            if (filters.search) query = query.or(`titulo.ilike.%${filters.search}%`);
+            if (filters.dificultad) query = query.eq('dificultad', filters.dificultad);
+            if (filters.fuente) query = query.eq('fuente', filters.fuente);
+            if (filters.publicado !== undefined) query = query.eq('publicado', filters.publicado);
             const start = (page - 1) * pageSize;
-            const end = start + pageSize - 1;
-
             const { data, error, count } = await query
                 .order('dificultad', { ascending: true })
-                .range(start, end);
-
-            if (error) { console.error('getProblemas:', error); return { data: [], count: 0 }; }
+                .range(start, start + pageSize - 1);
+            if (error) { console.error('getProblemasPaginados:', error); return { data: [], count: 0 }; }
             return { data: data || [], count: count || 0 };
         },
         async getProblemaById(id) {
@@ -265,6 +264,11 @@ export const AuthState = {
 
 
         // --- Usuarios (Profesores/Coaches/Jueces) ---
+        async getUsuarios() {
+            const { data, error } = await supabase.from('icpc_usuarios').select('*').order('nombre', { ascending: true });
+            if (error) { console.error('getUsuarios:', error); return []; }
+            return data || [];
+        },
         async validateUsuario(email, password) {
             const h = await AuthState._hash(password);
             const { data, error } = await supabase.from('icpc_usuarios')
@@ -308,88 +312,19 @@ export const AuthState = {
             return data;
         },
 
-        // --- Alumnos (Participantes en Supabase) ---
-        async getParticipantesByCoach(emailCoach) {
-            const { data, error } = await supabase
-                .from('icpc_usuarios')
-                .select('equipos_inscritos')
-                .eq('email', emailCoach)
-                .single();
-            if (error) return [];
-            return data.equipos_inscritos || [];
-        },
-
-        async saveParticipante(emailCoach, alumno) {
-            // Normalización
-            const emailNormal = alumno.email.toLowerCase().trim();
-            const nombreNormal = alumno.nombre.toUpperCase().trim();
-            const equipoNormal = alumno.equipo.trim();
-
-            const actual = await this.getUsuarioData(emailCoach);
-            let lista = actual.equipos_inscritos || [];
-
-            const idx = lista.findIndex(a => a.email === emailNormal);
-            const nuevoAlumno = {
-                email: emailNormal,
-                nombre: nombreNormal,
-                equipo: equipoNormal,
-                checkin: alumno.checkin || false
-            };
-
-            if (idx >= 0) {
-                lista[idx] = nuevoAlumno;
-            } else {
-                // Evitar duplicados por nombre si es necesario, o solo por email
-                lista.push(nuevoAlumno);
-            }
-
-            const { error } = await supabase
-                .from('icpc_usuarios')
-                .update({ equipos_inscritos: lista })
-                .eq('email', emailCoach);
-
-            if (error) throw error;
-            return true;
-        },
-
-        async deleteParticipante(emailCoach, emailAlumno) {
-            const actual = await this.getUsuarioData(emailCoach);
-            let lista = (actual.equipos_inscritos || []).filter(a => a.email !== emailAlumno.toLowerCase());
-
-            const { error } = await supabase
-                .from('icpc_usuarios')
-                .update({ equipos_inscritos: lista })
-                .eq('email', emailCoach);
-
-            if (error) throw error;
-            return true;
-        },
-
-        async isAlumnoPermitido(email) {
-            // Un alumno está permitido si aparece en los equipos_inscritos de CUALQUIER profesor
-            // Nota: En una fase posterior, esto debería filtrarse por concurso_id específico
-            const { data, error } = await supabase
-                .from('icpc_usuarios')
-                .select('equipos_inscritos');
-
-            if (error) return false;
-
-            const emailLower = email.toLowerCase().trim();
-            return data.some(u =>
-                (u.equipos_inscritos || []).some(a => a.email === emailLower)
-            );
-        },
-
         // --- Submissions (Tiempo Real Supabase) ---
         async addSubmission(sub) {
-            const concursoId = window.currentConcursoId || 'GLOBAL';
+            const concursoId = sub.concurso_id || window.currentConcursoId || 'GLOBAL';
             const { data, error } = await supabase.from('icpc_submissions').insert({
                 concurso_id: concursoId,
                 problema_id: sub.problema_id,
+                alumno_email: sub.alumno_email || null,
                 equipo: sub.equipo,
                 veredicto: sub.veredicto,
                 codigo_fuente: sub.codigo_fuente || '',
                 lenguaje: sub.lenguaje || 'cpp',
+                tiempo_ms: sub.tiempo_ms || 0,
+                memoria_kb: sub.memoria_kb || 0,
                 timestamp: Date.now()
             }).select().single();
 
@@ -400,16 +335,14 @@ export const AuthState = {
 
             // ── Lógica de Globos (Sprint 2) ──
             if (sub.veredicto === 'AC') {
-                // 1. Obtener color (si existe config)
                 const { data: config } = await supabase.from('icpc_globos_config')
                     .select('color')
                     .eq('concurso_id', concursoId)
                     .eq('problema_id', sub.problema_id)
                     .single();
 
-                const color = config?.color || '#cbd5e1'; // Gris por defecto si no hay config
+                const color = config?.color || '#cbd5e1';
 
-                // 2. Insertar entrega pendiente
                 await supabase.from('icpc_globos_delivery').insert({
                     concurso_id: concursoId,
                     equipo_nombre: sub.equipo,
@@ -424,9 +357,19 @@ export const AuthState = {
             const { data, error } = await supabase.from('icpc_submissions')
                 .select('*')
                 .eq('concurso_id', concurso_id)
-                .order('timestamp', { ascending: false });
+                .order('timestamp', { ascending: true }); // ascendente para procesar cronológicamente
             if (error) { console.error("Error fetching subs", error); return []; }
             return data || [];
+        },
+        async addAnuncio(concurso_id, mensaje, titulo = 'Actualización del Juez', tipo = 'info') {
+            await supabase.from('icpc_anuncios').insert({ concurso_id, titulo, mensaje, tipo });
+        },
+        async registrarAuditoria(dataLog) {
+            try {
+                await supabase.from('icpc_auditoria').insert(dataLog);
+            } catch (err) {
+                console.error("Auditoría: Fallo al registrar evento de seguridad", err);
+            }
         }
     }
 };
